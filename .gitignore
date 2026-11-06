@@ -1,0 +1,31 @@
+# Match data is licensed for the competition only. Never commit it.
+data/*
+!data/README.md
+*.mp4
+*_atd.txt
+*_atd.xml
+*_homography.csv
+*_smart_tagging.xml
+
+# External datasets are downloaded by script, not committed
+external_data/
+
+# Organisers' repository is cloned locally (see vendor/README.md)
+vendor/*
+!vendor/README.md
+
+# Generated outputs
+outputs/*
+!outputs/.gitkeep
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ipynb_checkpoints/
+
+# OS / editors
+.DS_Store
+.vscode/
+.idea/

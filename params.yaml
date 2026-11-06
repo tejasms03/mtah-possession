@@ -1,0 +1,37 @@
+# Every threshold lives here. Record where each value came from in docs/DECISIONS.md.
+# Starting values from physics; phase 0/1 measurements replace them.
+
+clean:
+  max_ball_speed_mps: 35.0
+  max_player_speed_mps: 11.0
+
+ball_filter:
+  measurement_noise_m: null      # phase 0: measure ball jitter
+  rolling_decel_mps2: null       # phase 1: IDSSE
+  carried_radius_m: 1.5
+  switch_prob: 0.02
+
+coupling:
+  sigma_d_m: 1.2
+  gate_d_m: 2.0
+  sigma_v_mps: 2.5
+  ballistic_speed_mps: 8.0
+
+control:
+  t_ctrl_s: 0.8                  # minimum controlled touch for a switch
+  t_release_s: 0.3               # contested: incumbent must lose contact this long
+  consecutive_touches: 2
+
+dead_ball:
+  min_duration_s: null           # phase 0: shortest D run in the public GT
+  restart_speed_mps: 3.0
+
+decode:
+  lambda_ha: null                # switch penalty H<->A
+  lambda_d: null                 # penalty in/out of D
+  switch_offset_frames: 0        # phase 0: GT switch timing vs first touch
+
+model:
+  window_s: 2.0
+  seed: 0
+  holdout_every_nth_minute: 5
