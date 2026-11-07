@@ -28,7 +28,8 @@ The model gets these for every frame in a window of ±2 s (101 frames) around th
 
 | feature | meaning |
 |---|---|
-| `d_nearest` | distance from ball to the team's nearest player |
+| `d_k`, k = 1..5 | distances from ball to the team's 5 nearest players, sorted (input that matched all players in Borghesi et al. 2023) |
+| `d_nearest` | = `d_1` |
 | `dv_nearest` | velocity mismatch between ball and that player |
 | `coupling` | `exp(-d²/2σd²)·exp(-|Δv|²/2σv²)·(1 − p_airborne)` |
 | `n_within_2m`, `n_within_5m` | team players near the ball |

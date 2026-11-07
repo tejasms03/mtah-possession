@@ -17,6 +17,20 @@ def run(out: Path) -> None:
     print(f"wrote {out}")
 
 
+def stage1(source: str = "tactical"):
+    """Load and clean the ATD; print the cleaning report (record it in docs/DECISIONS.md)."""
+    from possession.clean import clean_atd
+    from possession.load import load_atd
+
+    tr = clean_atd(load_atd(source), config.load_params())
+    graded = config.graded_mask()
+    print(f"slots: {tr.n_slots}  H: {(tr.team == 'H').sum()}  A: {(tr.team == 'A').sum()}  other: {(tr.team == '').sum()}")
+    for k, v in tr.report.items():
+        print(f"  {k}: {v}")
+    print(f"  ball missing on graded frames: {100 * (~tr.ball_observed[graded]).mean():.1f}%")
+    return tr
+
+
 def check_data() -> int:
     missing = [p for src in ("tactical", "broadcast") for p in config.asset_paths(src).values() if not p.exists()]
     for p in missing:
@@ -35,6 +49,8 @@ def main() -> None:
     p_val = sub.add_parser("validate")
     p_val.add_argument("path", type=Path)
     sub.add_parser("check-data")
+    p_clean = sub.add_parser("clean", help="stage 1 only: load + clean the ATD and print the report")
+    p_clean.add_argument("--source", default="tactical", choices=["tactical", "broadcast"])
     args = parser.parse_args()
 
     if args.cmd == "run":
@@ -45,6 +61,8 @@ def main() -> None:
             print(p)
         print(submission.summary(args.path))
         sys.exit(1 if any(not p.startswith("warning") for p in problems) else 0)
+    elif args.cmd == "clean":
+        stage1(args.source)
     elif args.cmd == "check-data":
         sys.exit(check_data())
 

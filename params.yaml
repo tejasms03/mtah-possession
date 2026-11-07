@@ -2,8 +2,13 @@
 # Starting values from physics; phase 0/1 measurements replace them.
 
 clean:
-  max_ball_speed_mps: 35.0
-  max_player_speed_mps: 11.0
+  max_ball_speed_mps: 35.0       # hardest shots ~35 m/s
+  max_player_speed_mps: 11.0     # fastest sprinters ~10 m/s
+  position_tolerance_m: 0.5      # detection jitter allowed on top of max speed
+  offpitch_margin_m: 5.0         # further outside the lines than this = junk
+  ball_min_run_frames: 3         # shorter impossible detours are deleted
+  duplicate_radius_m: 0.3        # two same-team detections closer than this = one player
+  velocity_halfwindow_frames: 3  # player velocity over ±0.12 s
 
 ball_filter:
   measurement_noise_m: null      # phase 0: measure ball jitter
