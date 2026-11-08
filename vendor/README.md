@@ -5,7 +5,7 @@ Clone the organisers' challenge repository here as `vendor/mtah`. It holds the o
 `games.py` and the starter notebooks.
 
 ```bash
-git clone <organisers-repo-url> vendor/mtah
+git clone https://github.com/metrica-sports/more-than-a-hack-2027.git vendor/mtah
 ```
 
 It is gitignored on purpose: we use their scorer **unchanged**, and it keeps their files out of our
