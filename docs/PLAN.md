@@ -3,7 +3,7 @@
 Deadline Mon 17 Nov 2026. **Submit Sat 15 Nov.** 16–17 Nov are buffer only.
 
 Merged from two research passes: [reports/Possession labelling method comparison.md](../reports/Possession%20labelling%20method%20comparison.md)
-and the team's "Football possession inference research" PDF. Where they disagreed, the choice and
+and the team's "Football possession inference research" PDF. Shared plan doc: https://claude.ai/artifact/WVMjHFFs64J7t9kHtK8v89. Where they disagreed, the choice and
 the reason are in DECISIONS.md.
 
 **What the score depends on, in order:**
@@ -60,7 +60,11 @@ raw ATD ─► 1 clean ─► 2 touches + short gap bridging ─► 3 notes per 
   tracks cut into fragments with slot swaps inside a team, jitter. Check: a classifier separating
   damaged IDSSE from our frames should score AUC ≈ 0.5.
 - Never train or tune on the public 5 minutes. Splits by match or time block, never random frames.
-- Deterministic: LightGBM `deterministic=True`, `force_row_wise=True`, fixed seeds and threads.
+- Deterministic: LightGBM `deterministic=True`, `force_row_wise=True`, fixed seeds and threads;
+  final file made on one machine and its SHA-256 committed.
+- Keep a change only if it beats the fallback by more than the ~0.04 noise band.
+- Never write X on a graded frame (spellF1 forward-fills it, macroF1 counts it as a miss).
+- Every threshold lives in `params.yaml`, its reason in `DECISIONS.md`.
 
 ### Not doing (and why)
 
@@ -102,6 +106,16 @@ raw ATD ─► 1 clean ─► 2 touches + short gap bridging ─► 3 notes per 
 | 3 | Stages 5–6: `decode.py` (λ_t, sub-state chains, restart rules, back-dating, lag correction) |
 | 4 | `external/idsse.py` (+ Metrica samples), damage + AUC check, `labeller.py`, `model.py` |
 | 5 | Harness and tuning loop (stage 7), reproducibility, technical document; TCN if time |
+
+## Risks and open questions (all checked Mon 9 Nov)
+
+| Risk | Check | Fallback |
+|---|---|---|
+| Dead-ball convention: D starts at ball over the line, whistle or last touch? ends at the restart touch? | IDSSE BallStatus and Metrica events vs the public window | Follow the public window |
+| Damaged IDSSE may not resemble our ATD | AUC of a classifier separating the two | Train on our confident frames only |
+| Baseline diagnostics (83–89% team, D recall 8–34%) are from our own run | Re-run with the harness | Re-rank priorities if D is not the main error |
+| Tactical video may have no audio | `ffprobe` | Drop the whistle |
+| Team-to-slot matching untested on the real metadata | `possession clean` shows ~11 H and ~11 A slots | Fix `slot_teams` before stage 2 |
 
 ## Cut order if behind
 
