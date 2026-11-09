@@ -1,79 +1,111 @@
 # Plan
 
-Deadline Mon 17 Nov 2026. **Submit Sat 15 Nov.**
+Deadline Mon 17 Nov 2026. **Submit Sat 15 Nov.** 16–17 Nov are buffer only.
 
-Why this design: [reports/Possession labelling method comparison.md](../reports/Possession%20labelling%20method%20comparison.md).
-Short version: the decoder and the match between training data and our data matter more than the
-model. A neural net is an optional second opinion, never the core.
+Merged from two research passes: [reports/Possession labelling method comparison.md](../reports/Possession%20labelling%20method%20comparison.md)
+and the team's "Football possession inference research" PDF. Where they disagreed, the choice and
+the reason are in DECISIONS.md.
 
-## The system in one picture
+**What the score depends on, in order:**
+1. **Dead ball.** The ball is out of play ~40% of LaLiga match time. Every missed stoppage merges two
+   possessions into one long wrong one and deletes a D segment. The published baseline almost never
+   predicts D.
+2. **Boundary timing.** For a possession of length L that starts δ late, IoU ≈ (L−δ)/(L+δ). A 3 s
+   possession 1 s late only passes thresholds 0.3–0.5.
+3. **Flicker.** One stray switch turns 1 match into 0 matches + 2 false positives.
+4. **Team identity on live frames** is the least urgent: already 83–89% right in the baseline.
+
+So the work goes into a dead-ball detector that fuses several signals, and a decoder that switches
+only at real events and on time. The model choice (LightGBM vs NN) matters least.
+
+## The system
 
 ```
-raw ATD ─► 1 clean ─► 2 bridge ball gaps + find touches ─► 3 notes per frame (±2 s)
+raw ATD ─► 1 clean ─► 2 touches + short gap bridging ─► 3 notes per frame (multi-scale windows)
                                                               │
-                 IDSSE (7 Bundesliga matches, labelled)       │
-                 damaged to look like our ATD ─► same 1-3 ────┤
+   IDSSE (7 Bundesliga, labelled) ──► damage to match our ATD ┤   Metrica samples: label convention
                                                               ▼
-                         4 two LightGBM models: "in play?" and "whose ball?"
-                           trained on damaged IDSSE + our confident frames
+   4a dead-ball evidence: stasis, ball out, dropout runs,  4b LightGBM A: P(dead)
+      Smart Tagging set pieces, [whistle if audio exists]   4c LightGBM B: P(Barça | live)
                                                               ▼
-                         5 decoder: calmest story that respects football rules
+   boundary score b_t (touch peaks, nearest-team change, ball out, set-piece start, [whistle])
                                                               ▼
-                         6 move each switch back to the new team's first touch
+            5 decoder: Viterbi H/A/D, switch cost λ_t = λ0 − α·b_t, min durations, restart rules
                                                               ▼
-                         7 CSV → validate → submit
+            6 timing: back-date to first touch, then subtract median lag measured on IDSSE
+                                                              ▼
+            7 tune all dials on spellF1 (leave one IDSSE match out) → CSV → validate → verify
 ```
-
-## The stages
 
 | # | Stage | What it does | Module |
 |---|---|---|---|
-| 1 | Clean | Parse the ATD, convert to metres, delete physically impossible ball points (> 35 m/s) and off-pitch junk, give every player a velocity without trusting slot ids | `load.py`, `clean.py` |
-| 2 | Bridge gaps, find touches | Fill **short** ball gaps from the ball's last motion (not long ones); mark touches = sudden change in ball speed or direction | `ballfilter.py` |
-| 3 | Notes per frame | Ball state, each team's 5 nearest players to the ball (sorted), last toucher, team shape, stoppage clues, all over ±2 s | `features.py` (see FEATURES.md) |
-| 4 | Score | Model A: in play vs dead. Model B: Barça vs Athletic. Each outputs a probability per frame | `model.py`, `labeller.py` (confident frames), `deadball.py` (stoppage clues), `external/idsse.py` (training data) |
-| 5 | Decode | Viterbi over H / A / D: cost per switch, minimum lengths, H↔A only near a touch, restart rules, confident frames locked | `decode.py` |
-| 6 | Back-date | Move each switch to the new team's first controlled touch within about −2 s … +0.5 s | `decode.py` |
-| 7 | Tune and ship | Tune decoder dials on spellF1, leave one IDSSE match out at a time; one check on the public 5 min; write, validate, verify | `decode.py`, `sanity.py`, `submission.py` |
+| 1 | Clean | Parse ATD, metres, delete impossible ball detours and off-pitch junk, duplicate players, slot-free velocities. **Done.** | `load.py`, `clean.py` |
+| 2 | Touches, gaps | Savitzky–Golay ball smoothing (2nd order, 7 frames); touch = acceleration peak (start ≥ 4 m/s², retune for our noise) or direction change > 10° near a player; bridge gaps ≤ 0.5 s only | `ballfilter.py` |
+| 3 | Notes per frame | Ball state; each team's 5 nearest players sorted by distance; 1 m possession zone, duel flag (2+ opponents within 1 m); team shape; same-team logic only (never same player). Windows at several scales: ±0.4, ±1, ±2, ±4 s for live play and up to ±40 s for stoppage context | `features.py` |
+| 4a | Dead-ball evidence | Team stasis (mean speed drop), ball beyond a line in ATD coordinates, ball-dropout runs, Smart Tagging set pieces (and which team restarts), set-piece formations; whistle only if the tactical video has a usable audio track | `deadball.py` |
+| 4b/c | Scores | LightGBM A: dead vs alive. LightGBM B: Barça vs Athletic on live frames. Trained on damaged IDSSE (+ confident frames from our match, down-weighted) | `model.py`, `labeller.py`, `external/idsse.py` |
+| 5 | Decode | 3-state Viterbi, each state expanded into a chain of 5–10 sub-states for a minimum duration. H↔A dearer than ↔D. Switch cost drops where the boundary score is high. Restart rules: after ball out, the opponent of the last toucher restarts; after a goal, the conceding team. Confident frames locked | `decode.py` |
+| 6 | Timing | Back-date each switch to the new team's first controlled touch (−2 s … +0.5 s), then measure the predicted-minus-true lag histogram on damaged IDSSE and subtract its median | `decode.py` |
+| 7 | Tune and ship | Grid search λ0, α, min durations, offsets on spellF1 across held-out IDSSE matches. Public 5 min: one sanity look for gross convention errors only | `decode.py`, `sanity.py`, `submission.py` |
 
 ### Rules we hold to
 
-- The public 5 minutes is never trained or tuned on. It is the exam paper: if it is badly off,
-  our understanding of the labels is wrong, so fix logic, not numbers.
-- IDSSE is damaged to match **our** ball-gap pattern, not random dropout. Check: a classifier that
-  tries to tell damaged IDSSE from our data should score AUC ≈ 0.5.
-- Day-1 check: does IDSSE mean the same thing by possession and dead ball as the organisers' GT?
-- One round of self-training at most. Splits are by match or time block, never random frames.
-- LightGBM with `deterministic=True`, `force_row_wise=True`, fixed seeds, fixed threads.
+- **Day-1 harness first.** Local spellF1/macroF1 = the organisers' `possession_metrics.py`, run on
+  damaged IDSSE and on the public window. Reproduce the 0.2433 baseline before changing anything.
+- **Label convention is the biggest unmeasured risk:** when does dead ball start (ball over the line,
+  whistle, last touch) and end (restart touch)? Check IDSSE BallStatus and Metrica sample-data events
+  (same provider as this challenge) against the public window on day 1. Where they disagree, follow
+  what the public window shows.
+- IDSSE damage matches **our** pattern: ball missing ~41% in bursts (more in crowds and in flight),
+  tracks cut into fragments with slot swaps inside a team, jitter. Check: a classifier separating
+  damaged IDSSE from our frames should score AUC ≈ 0.5.
+- Never train or tune on the public 5 minutes. Splits by match or time block, never random frames.
+- Deterministic: LightGBM `deterministic=True`, `force_row_wise=True`, fixed seeds and threads.
 
-### The neural net (optional)
+### Not doing (and why)
 
-A small temporal CNN (TCN) on the same inputs as LightGBM. **One person, 10–11 Nov.** Kept only if
-it beats LightGBM on held-out IDSSE matches over 3 seeds; if kept, its probabilities are averaged
-with LightGBM's before the decoder.
+- **Video ball detection (WASB etc.):** team decision, not a vision project; hours of GPU per run
+  that the organisers would have to repeat to reproduce the file.
+- **Homography for ball-out:** the tactical ATD is already in pitch coordinates.
+- **PathCRF / Ballradar retraining, label models (Snorkel), DANN:** improve frames that are already
+  mostly right, cost days, need player IDs or target labels we don't have.
+- **Neural net:** optional only, see below.
+
+### Optional, each owned by one person and dropped first if behind
+
+- **Whistle detector (11 Nov):** only if `ffprobe` shows an audio track on the tactical video.
+  Self-calibrated narrow band with short repeated bursts, persistence ≥ 150–250 ms, no hardcoded
+  frequency; check sync by aligning whistles with drops in team speed. Unverified that audio exists.
+- **Small TCN (12 Nov):** same inputs as LightGBM; kept only if it beats it on held-out IDSSE
+  matches over 3 seeds; then averaged with LightGBM before the decoder.
+- **HSMM with IDSSE duration priors (13 Nov):** only if the Viterbi plateaus.
 
 ## Days
 
-| Days | Work | Exit |
+| Day | Work | Exit |
 |---|---|---|
-| 7–8 Nov | Stages 1–3; download IDSSE; audit (ball-gap pattern, public-GT boundaries, IDSSE label meaning) | features for our match and IDSSE, audit notes in DECISIONS.md |
-| 8–9 Nov | Confident labeller, dead-ball + restart rules, decoder v1 on rule scores | **fallback submission saved by 9 Nov** |
-| 9–12 Nov | Damage IDSSE (AUC check), models A and B, tune decoder on spellF1; NN time-box 10–11 Nov | keep only what beats the fallback beyond noise |
-| 13 Nov | Freeze params, fresh clone, `make verify` byte-identical | SUBMISSION_SHA256 committed |
-| 14–15 Nov | Technical document, validate exact file, upload | submitted |
+| Mon 9 Nov | Tactical data in, `possession clean` on it. Harness: scorer on public window + IDSSE loader + damage v0; reproduce baseline. Convention check (IDSSE, Metrica events, public window). `ffprobe` the tactical video for audio | baseline reproduced; convention written in DECISIONS.md |
+| Tue 10 Nov | Stage 2 touches; dead-ball v1 (stasis, ball out, dropout runs, set-piece tags); decoder v1 on rule scores with λ_t | **fallback submission saved** |
+| Wed 11 Nov | Stage 3 multi-scale features; LightGBM A and B on damaged IDSSE; whistle (optional) | models beat rule scores on held-out IDSSE |
+| Thu 12 Nov | Restart rules, back-dating, lag correction; grid search on spellF1; TCN (optional) | tuned pipeline |
+| Fri 13 Nov | Ablations, AUC domain check, HSMM if plateau; freeze params | params frozen |
+| Sat 14 Nov | Fresh clone, `make verify` byte-identical; technical document | SUBMISSION_SHA256 committed |
+| Sun 15 Nov | Validate exact file, upload | **submitted** |
+| 16–17 Nov | Buffer and resubmission only | |
 
 ## Owners
 
 | Person | Work |
 |---|---|
-| 1 | Stages 1–3: `load.py`, `clean.py`, `ballfilter.py`, `features.py` |
-| 2 | `deadball.py`: stoppages, set-piece templates, restart rules; public-GT boundary inventory |
-| 3 | Stages 5–7: `decode.py`, back-dating, tuning on spellF1, `sanity.py` |
-| 4 | `external/idsse.py` (download, damage, AUC check), `labeller.py`, `model.py` |
-| 5 | Repo, reproducibility, technical document; NN time-box |
+| 1 | Stages 1–3: `clean.py` (done), `ballfilter.py` touches, `features.py` |
+| 2 | Stage 4a: `deadball.py` (stasis, ball out, dropout, set pieces, restart team); whistle if audio |
+| 3 | Stages 5–6: `decode.py` (λ_t, sub-state chains, restart rules, back-dating, lag correction) |
+| 4 | `external/idsse.py` (+ Metrica samples), damage + AUC check, `labeller.py`, `model.py` |
+| 5 | Harness and tuning loop (stage 7), reproducibility, technical document; TCN if time |
 
 ## Cut order if behind
 
-1. Neural net
-2. IDSSE training (models trained on our confident frames only)
-3. Never the fallback
+1. TCN, HSMM
+2. Whistle
+3. IDSSE-trained models (decoder runs on rule scores)
+4. Never the fallback
