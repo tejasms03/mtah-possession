@@ -45,13 +45,13 @@ dead_ball:
 
 decode:
   temperature: 0.1               # scales all per-frame evidence (neighbouring frames are correlated)
-  lambda_ha: 8                 # cost of an H<->A switch away from any touch
+  lambda_ha: 2                 # cost of an H<->A switch away from any touch
   lambda_ha_touch: 2           # ... within touch_window_frames of a detected touch
   touch_window_frames: 12
   lambda_d_exit: 4             # cost of leaving D away from a touch (restarts are kicks)
-  lambda_d_exit_touch: 1       # ... within touch_window_frames of a touch
-  lambda_d: 8                    # cost of entering D
-  min_possession_frames: 20      # 0.6 s; the public GT has possessions as short as 0.8 s
+  lambda_d_exit_touch: 4       # ... within touch_window_frames of a touch
+  lambda_d: 4                    # cost of entering D
+  min_possession_frames: 10      # 0.6 s; the public GT has possessions as short as 0.8 s
   min_dead_frames: 50            # 2 s: 99% of dead spells in DFL, Metrica and the public GT last longer; not tuned
   w_touch: 10                  # log-odds for the touching team at a touch frame
   w_control: 0                 # per frame, ball within control_radius of one team and clear of the other
@@ -85,10 +85,11 @@ model:
   max_leaf_nodes: 31
   min_samples_leaf: 300          # high: neighbouring frames are near copies
   l2: 1.0
+  dead_metrica_full: true        # average model A with a Metrica-only dead model that keeps ball motion
   dead_drop_prefixes: [ball_speed, ball_still_s, touch_since, touch_until, d1_min, n5_sum]  # DFL freezes the ball at stoppages
-  w_dead: 1                    # decoder: weight on model A log-odds
-  w_team: 8                    # decoder: weight on model B log-odds
-  dead_bias: 0.0                 # decoder: shift on model A log-odds
+  w_dead: 0.5                    # decoder: weight on model A log-odds
+  w_team: 1                    # decoder: weight on model B log-odds
+  dead_bias: 1                 # decoder: shift on model A log-odds
 
 idsse_degrade:                   # calibrated to BAR-ATH tactical ATD aggregates, see DECISIONS.md
   seed: 0

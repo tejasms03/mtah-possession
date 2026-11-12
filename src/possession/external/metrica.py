@@ -11,7 +11,9 @@ Labels are built from the events (there are no per-frame labels):
 - possession = team of the latest PASS / CARRY / RECOVERY / SET PIECE / SHOT / BALL OUT, carried
   forward (BALL LOST and CHALLENGE do not change it; the opponent's RECOVERY does)
 - dead ball = from the ball going out (BALL OUT end frame, a SHOT that goes out or scores) or a
-  FAULT RECEIVED, until the next SET PIECE starts (capped at dead_max_s)
+  FAULT RECEIVED, until the first action after it (SET PIECE, PASS, CARRY, SHOT, RECOVERY),
+  capped at dead_max_s. Not "until the next SET PIECE": Metrica logs a goal kick as the keeper's
+  next PASS, so that rule ran every goal-kick stoppage on to the next throw-in or corner.
 Only the players are damaged (identities, fragments, noise, as for IDSSE). The ball is left as it is.
 """
 
@@ -31,6 +33,7 @@ PITCH = (105.0, 68.0)
 DIR = REPO_ROOT / "external_data" / "metrica"
 RAW = "https://raw.githubusercontent.com/metrica-sports/sample-data/master/data"
 POSSESSION_EVENTS = ("PASS", "CARRY", "RECOVERY", "SET PIECE", "SHOT", "BALL OUT")
+RESTART_EVENTS = ("SET PIECE", "PASS", "CARRY", "SHOT", "RECOVERY")
 
 
 def _events(game: int, home_name: str) -> pd.DataFrame:
@@ -81,10 +84,10 @@ def labels(ev: pd.DataFrame, frame_id: np.ndarray, period: np.ndarray, dead_max_
         owner[i] = cur
 
     dead = np.zeros(n, dtype=bool)
-    restarts = np.sort(ev.loc[ev["type"] == "SET PIECE", "start"].to_numpy())
+    restarts = np.sort(ev.loc[ev["type"].isin(RESTART_EVENTS), "start"].to_numpy())
     goes_out = (ev["type"] == "BALL OUT") | ((ev["type"] == "SHOT") & ev["sub"].str.contains("OUT|GOAL"))
     for f in pd.concat([ev.loc[goes_out, "end"], ev.loc[ev["type"] == "FAULT RECEIVED", "start"]]):
-        k = np.searchsorted(restarts, f)
+        k = np.searchsorted(restarts, f, side="right")
         stop = restarts[k] if k < len(restarts) else f + dead_max_frames
         a, b = at(f), at(min(stop, f + dead_max_frames))
         same_period = period[a : b] == period[a]

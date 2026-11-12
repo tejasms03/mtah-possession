@@ -121,14 +121,27 @@ def training_sets(preps: list[dict], params: dict):
 
 
 def fit(preps: list[dict], params: dict):
+    """(model A, model B, model A-full or None). Model A-full is a second dead-ball model on the
+    Metrica matches only, with every feature including ball motion: Metrica's ball moves at
+    stoppages like ours, so there a hard kick out of stillness is a genuine restart cue."""
     Xa, ya, Xb, yb = training_sets(preps, params)
-    return make_model(params).fit(Xa, ya), make_model(params).fit(Xb, yb)
+    a, b = make_model(params).fit(Xa, ya), make_model(params).fit(Xb, yb)
+    full = None
+    met = [p for p in preps if str(p.get("id", "")).startswith("MET")]
+    if params["model"]["dead_metrica_full"] and met:
+        step = params["model"]["row_step"]
+        X = np.concatenate([p["dead"][rows(p, step)] for p in met])
+        y = np.concatenate([p["gt"][rows(p, step)] == "D" for p in met])
+        full = make_model(params).fit(X, y)
+    return a, b, full
 
 
 def predict(models, prep: dict, params: dict) -> tuple[np.ndarray, np.ndarray]:
     """(dead log-odds, H-vs-A log-odds) per frame."""
-    a, b = models
+    a, b, full = models
     dead = a.decision_function(prep["dead"][:, dead_keep(params)])
+    if full is not None:
+        dead = (dead + full.decision_function(prep["dead"])) / 2
     team = (b.decision_function(prep["own_H"]) - b.decision_function(prep["own_A"])) / 2
     return dead, team
 
