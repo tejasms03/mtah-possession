@@ -31,7 +31,7 @@ def label_with_models(tr, halves, params, tags=None, pitch=None) -> np.ndarray:
     m = params["model"]
     dead = m["w_dead"] * dead + m["dead_bias"]
     hints = deadball.set_piece_hints(tags) if tags is not None else None
-    return decode.decode(prep["bt"], dead, halves, params, hints, model_team_llr=team)
+    return decode.decode(prep["bt"], dead, halves, params, hints, model_team_llr=team, pitch=pitch)
 
 
 def run(out: Path, rules_only: bool = False) -> None:

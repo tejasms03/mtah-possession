@@ -139,8 +139,57 @@ def add_set_piece_hints(dead_logodds, team_llr, hints, params):
     return dead, llr
 
 
+def refine_boundaries(lab: np.ndarray, bt: BallTrack, a: int, b: int, params: dict, pitch) -> np.ndarray:
+    """Stage 6: move each decoded boundary in [a, b] onto the event that causes it.
+
+    - switch to team q: the first touch by q that follows a touch by the other team, nearest the
+      decoded switch within +-snap_s
+    - stop (into D): the frame the ball is first seen beyond a line, within -snap_s .. +snap_stop_after_s
+    - restart (out of D into q): the nearest touch, by q if there is one, within +-snap_s
+    Boundaries with no such event nearby stay where the decoder put them. A move never crosses
+    the neighbouring boundaries."""
+    from possession.deadball import out_distance
+
+    p = params["decode"]
+    w, w_after = int(p["snap_s"] * 25), int(p["snap_stop_after_s"] * 25)
+    out = lab.copy()
+    seg = lab[a : b + 1]
+    edges = list(np.flatnonzero(seg[1:] != seg[:-1]) + 1 + a)
+    if not edges:
+        return out
+    touch_idx = np.flatnonzero(bt.touch[a : b + 1]) + a
+    touch_team = bt.touch_team[touch_idx]
+    prev_team = np.r_[[""], touch_team[:-1]]
+    seen_out = np.flatnonzero(out_distance(np.where(bt.observed, bt.x, np.nan),
+                                           np.where(bt.observed, bt.y, np.nan), pitch)[a : b + 1] > 0.5) + a
+    bounds = [a] + edges + [b + 1]
+    for k in range(1, len(bounds) - 1):
+        t, lo, hi = bounds[k], bounds[k - 1] + 1, bounds[k + 1] - 1
+        before, after = lab[t - 1], lab[t]
+        cand = np.array([], dtype=np.int64)
+        if before in "HA" and after in "HA":
+            m = (touch_team == after) & (prev_team != after) & (prev_team != "")
+            cand = touch_idx[m & (abs(touch_idx - t) <= w)]
+        elif after == "D":
+            cand = seen_out[(seen_out >= t - w) & (seen_out <= t + w_after)]
+            cand = cand[:1] if len(cand) else cand
+        elif before == "D":
+            near = abs(touch_idx - t) <= w
+            own = near & (touch_team == after)
+            cand = touch_idx[own] if own.any() else touch_idx[near]
+        cand = cand[(cand >= lo) & (cand <= hi)]
+        if len(cand):
+            n = int(cand[np.argmin(abs(cand - t))])
+            if n < t:
+                out[n:t] = after
+            elif n > t:
+                out[t:n] = before
+            bounds[k] = n
+    return out
+
+
 def decode(bt: BallTrack, dead_logodds: np.ndarray, halves, params: dict, hints=None,
-           model_team_llr=None) -> np.ndarray:
+           model_team_llr=None, pitch=(105.3, 68.0)) -> np.ndarray:
     """Labels (N,) "H"/"A"/"D" inside each half, "X" outside. model_team_llr (model B's H-vs-A
     log-odds) is added to the touch evidence when given."""
     p = params["decode"]
@@ -155,4 +204,6 @@ def decode(bt: BallTrack, dead_logodds: np.ndarray, halves, params: dict, hints=
     out = np.full(len(e), "X", dtype="<U1")
     for _, a, b in halves:
         out[a : b + 1] = LABELS[viterbi(e[a : b + 1], min_len, cost[a : b + 1])]
+        if p["refine"]:
+            out = refine_boundaries(out, bt, a, b, params, pitch)
     return out

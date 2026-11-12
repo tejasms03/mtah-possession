@@ -65,7 +65,8 @@ def evaluate(preps, params) -> tuple[float, list[float]]:
         if "oof_dead" in p:
             m = params["model"]
             dead = m["w_dead"] * p["oof_dead"] + m["dead_bias"]
-            lab = decode.decode(p["bt"], dead, p["halves"], params, model_team_llr=p["oof_team"])
+            lab = decode.decode(p["bt"], dead, p["halves"], params, model_team_llr=p["oof_team"],
+                                pitch=p["pitch"])
         else:
             dead = deadball.rule_dead_logodds(p["f"], params)
             lab = decode.decode(p["bt"], dead, p["halves"], params)
