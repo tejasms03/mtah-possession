@@ -6,8 +6,8 @@ Alignment rules from DATA.md:
   homography    frame 0..199318      -> already a video frame
 
 ATD raw line format (checked on the broadcast file):
-  <frame_id>:<x>,<y>,<speed>;<x>,<y>,<speed>;... (one triple per track slot) :<ball_x>,<ball_y>,<ball_z>
-Coordinates are 0-1 of the pitch. Slot speed can be NaN while x,y are set. ball_z is always NaN.
+  <frame_id>:<x>,<y>,<speed>;<x>,<y>,<speed>;... (one triple per track slot) :<ball_x>,<ball_y>,<ball_speed>
+Coordinates are 0-1 of the pitch. Speeds can be NaN while x,y are set. Ball speed is present on only ~9% of frames with a ball.
 """
 
 import io
