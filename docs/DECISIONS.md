@@ -34,6 +34,7 @@ document, so record what was tried and dropped as well as what was kept.
 | 2026-11-12 | DFL freezes the ball whenever play is dead (speed exactly 0 on 100% of dead frames, clean files too) | | model A learned "ball still = dead" (95% on DFL) and missed 3 of 4 stoppages in the public window, where our ball keeps moving (median 2.7 m/s in D) | |
 | 2026-11-12 | Model A drops ball-motion and ball-handling features (33 of 116) | params `model.dead_drop_prefixes` | v2: honest DFL bench 0.585; public check 0.400, D recall 0.94 but D on 58% of the full match (overshoot). Not adopted | |
 | 2026-11-12 | Metrica sample data (3 matches) added: same provider, ball moves at stoppages, 32-41% missing | `external/metrica.py`; labels from events | v3 (10 matches): bench Metrica 0.69, DFL 0.59; public check 0.491 (v1 0.563), macroF1 0.785 (best), D F1 0.74; D still 58% of the full match. Open question: GT D share is 20% in the public window, bench labels 35-48% | |
+| 2026-11-12 | v4: dead spells at least 2 s (99% of DFL/Metrica/GT dead spells are longer; not tuned) and leaving D cheap only at a touch (restarts are kicks) | params `decode.min_dead_frames`, `lambda_d_exit*` | v3 extra D in the public window: 19 s late ends, 10 s early starts, 6 s spurious incl. 0.2-0.7 s blips. v4 bench Metrica 0.681, DFL 0.587; public check 0.521, 16 vs 17 possessions, mean 13.4 vs 14.2 s, frag 0.95; spellF1 0.67 @0.3 vs 0.24 @0.7 -> boundaries are the loss | |
 
 ## Phase 0 audit
 

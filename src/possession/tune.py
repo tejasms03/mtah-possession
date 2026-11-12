@@ -84,7 +84,8 @@ MODEL_GRID = {
     "decode.lambda_d": [0.5, 1, 2, 4, 8],
     "decode.temperature": [0.05, 0.1, 0.2, 0.4],
     "decode.min_possession_frames": [1, 5, 10, 20],
-    "decode.min_dead_frames": [5, 25, 50, 100],
+    "decode.lambda_d_exit": [2, 4, 8, 16, 32],
+    "decode.lambda_d_exit_touch": [0.25, 1, 2, 4],
 }
 
 

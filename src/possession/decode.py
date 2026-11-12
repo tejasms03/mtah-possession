@@ -119,6 +119,10 @@ def switch_costs(bt: BallTrack, n: int, params: dict) -> np.ndarray:
     ha = np.where(near_touch, p["lambda_ha_touch"], p["lambda_ha"])
     cost[:, 0, 1] = ha
     cost[:, 1, 0] = ha
+    # play restarts with a kick: leaving D is cheap only near a detected touch
+    exit_d = np.where(near_touch, p["lambda_d_exit_touch"], p["lambda_d_exit"])
+    cost[:, 2, 0] = exit_d
+    cost[:, 2, 1] = exit_d
     return cost
 
 
