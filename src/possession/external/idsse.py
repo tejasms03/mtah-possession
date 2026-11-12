@@ -69,6 +69,23 @@ def _files(match_id: str, dest: Path = IDSSE_DIR) -> dict[str, tuple[str, Path]]
     return out
 
 
+def _fetch(url: str, path: Path, tries: int = 4, timeout_s: int = 60) -> None:
+    """Download to path via a .part file. A read that stalls for timeout_s raises and is retried
+    from scratch (urlretrieve has no timeout and once hung for 30 min on a stalled connection)."""
+    tmp = path.with_suffix(".part")
+    for attempt in range(1, tries + 1):
+        try:
+            with urllib.request.urlopen(url, timeout=timeout_s) as r, open(tmp, "wb") as fh:
+                while chunk := r.read(1 << 20):
+                    fh.write(chunk)
+            tmp.rename(path)
+            return
+        except OSError as err:
+            print(f"  {path.name}: attempt {attempt} failed ({err})", flush=True)
+            tmp.unlink(missing_ok=True)
+    raise RuntimeError(f"could not download {url}")
+
+
 def download(dest: Path = IDSSE_DIR, match_ids=tuple(MATCHES)) -> list[Path]:
     """Fetch any missing file. ~2.6 GB in total."""
     dest.mkdir(parents=True, exist_ok=True)
@@ -76,9 +93,7 @@ def download(dest: Path = IDSSE_DIR, match_ids=tuple(MATCHES)) -> list[Path]:
     for mid in match_ids:
         for url, path in _files(mid, dest).values():
             if not path.exists() or path.stat().st_size == 0:
-                tmp = path.with_suffix(".part")
-                urllib.request.urlretrieve(url, tmp)
-                tmp.rename(path)
+                _fetch(url, path)
             paths.append(path)
     return paths
 

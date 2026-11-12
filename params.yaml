@@ -62,6 +62,10 @@ decode:
   tag_team_frames: 375           # 15 s after the tag start
   switch_offset_frames: 0        # stage 6: measured lag correction
 
+features:
+  team_windows_s: [0.4, 1, 2, 4]          # centred means for the whose-ball notes
+  game_windows_s: [0.4, 1, 2, 4, 10, 40]   # dead-ball notes also need stoppage-length context
+
 idsse_bench:
   merge_blip_s: 2.0              # merge A-H-A blips shorter than this: 3.5 possessions/min vs public GT 3.4
 

@@ -16,15 +16,16 @@ from possession import ballfilter, config, deadball, decode
 from possession.clean import clean_atd
 
 GRID = {
-    "decode.lambda_ha": [4, 8, 12, 16, 24, 32],
-    "decode.lambda_ha_touch": [0.5, 1, 2, 4, 8],
-    "decode.lambda_d": [2, 4, 8, 12, 16, 24],
+    "decode.lambda_ha": [4, 6, 8, 12, 16, 24],
+    "decode.lambda_ha_touch": [0.1, 0.25, 0.5, 1, 2],
+    "decode.lambda_d": [0.5, 1, 2, 3, 4, 8],
     "decode.temperature": [0.03, 0.05, 0.1, 0.2, 0.4],
-    "decode.min_possession_frames": [5, 10, 15, 25],
-    "decode.min_dead_frames": [25, 50, 75, 125],
-    "decode.w_control": [0, 0.5, 1, 2],
-    "dead_ball.speed_ref_mps": [1.4, 1.6, 1.8, 2.0, 2.2],
-    "dead_ball.w_speed": [1, 2, 3, 5, 8],
+    "decode.min_possession_frames": [1, 3, 5, 10, 15],
+    "decode.min_dead_frames": [5, 10, 25, 50],
+    "decode.w_touch": [5, 10, 20, 40],
+    "decode.w_control": [0, 0.5, 1],
+    "dead_ball.speed_ref_mps": [1.6, 1.8, 2.0, 2.2, 2.4],
+    "dead_ball.w_speed": [1, 2, 3, 5],
     "dead_ball.bias": [-3, -2, -1, 0, 1],
 }
 
