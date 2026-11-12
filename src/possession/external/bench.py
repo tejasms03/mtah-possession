@@ -50,16 +50,49 @@ def upstream_baseline(m: IdsseMatch, window: int = 50) -> np.ndarray:
     return ub.smooth(np.where(seen, code, ub.NOBODY).astype(np.int8), window)
 
 
+def merge_blips(gt: np.ndarray, min_frames: int) -> np.ndarray:
+    """IDSSE marks possession almost touch by touch. A spell of one team shorter than min_frames
+    with the other team on both sides (a deflection, a touch without control) is given to that
+    other team, which is what the challenge counts as no change of possession."""
+    out = gt.copy()
+    edges = np.flatnonzero(gt[1:] != gt[:-1]) + 1
+    starts = np.concatenate([[0], edges])
+    ends = np.concatenate([edges, [len(gt)]])
+    for k in range(1, len(starts) - 1):
+        s, e = starts[k], ends[k]
+        before, here, after = out[starts[k - 1]], out[s], gt[starts[k + 1]]
+        if here in ("H", "A") and e - s < min_frames and before == after and before in ("H", "A") and before != here:
+            out[s:e] = before
+    return out
+
+
+def fallback(m: IdsseMatch) -> np.ndarray:
+    """Our rule-only pipeline (stages 1-6, no model, no Smart Tagging on IDSSE)."""
+    from possession.clean import clean_atd
+    from possession.config import load_params
+    from possession.pipeline import label_tracking
+
+    params = load_params()
+    return label_tracking(clean_atd(m.tracking, params), m.halves, params, pitch=m.pitch)
+
+
 PIPELINES = {
     "baseline": upstream_baseline,
+    "fallback": fallback,
 }
 
 
 # -- scoring ----------------------------------------------------------------------------------
 
-def score(m: IdsseMatch, labels: np.ndarray) -> dict:
+def bench_gt(m: IdsseMatch) -> np.ndarray:
+    from possession.config import FPS, load_params
+
+    return merge_blips(m.gt, int(round(load_params()["idsse_bench"]["merge_blip_s"] * FPS)))
+
+
+def score(m: IdsseMatch, labels: np.ndarray, gt: np.ndarray | None = None) -> dict:
     pm = _vendor("possession_metrics")
-    r = pm.evaluate(pm.label_codes(m.gt), pm.label_codes(labels))
+    r = pm.evaluate(pm.label_codes(bench_gt(m) if gt is None else gt), pm.label_codes(labels))
     return {
         "match": m.match_id,
         "spellF1": r["spell_f1_mean"],

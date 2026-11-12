@@ -277,15 +277,13 @@ def degrade_players(rng, m: "IdsseMatch", p: dict):
 
 
 def speeds(px: np.ndarray, py: np.ndarray, smooth: int) -> np.ndarray:
-    """m/s per slot from positions; NaN where the slot is not visible on both frames."""
+    """m/s per slot: displacement over `smooth` frames centred on each frame, divided by the time.
+    Averaging per-frame speed magnitudes instead would add the position noise up (it never
+    cancels), which gave ~6.7 m/s for players standing still at a restart."""
+    h = max(1, smooth // 2)
     v = np.full_like(px, np.nan)
-    v[1:] = np.hypot(np.diff(px, axis=0), np.diff(py, axis=0)) * FPS
-    k = np.ones(smooth) / smooth
-    ok = ~np.isnan(v)
-    num = np.apply_along_axis(lambda c: np.convolve(c, k, "same"), 0, np.where(ok, v, 0))
-    den = np.apply_along_axis(lambda c: np.convolve(c, k, "same"), 0, ok.astype(float))
-    with np.errstate(invalid="ignore", divide="ignore"):
-        return np.where(ok, num / den, np.nan)
+    v[h:-h] = np.hypot(px[2 * h:] - px[:-2 * h], py[2 * h:] - py[:-2 * h]) * FPS / (2 * h)
+    return v
 
 
 def degrade(match: "IdsseMatch", noise_params: dict, seed: int) -> "IdsseMatch":

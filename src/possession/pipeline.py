@@ -9,10 +9,25 @@ import numpy as np
 from possession import config, submission
 
 
+def label_tracking(tr, halves, params, tags=None, pitch=None) -> np.ndarray:
+    """Stages 2-6 on cleaned tracking (BAR-ATH or IDSSE). Rule-only fallback: no trained model."""
+    from possession import ballfilter, deadball, decode
+
+    bt = ballfilter.run(tr, params)
+    feats = deadball.frame_features(tr, bt, params, pitch)
+    dead = deadball.rule_dead_logodds(feats, params)
+    hints = deadball.set_piece_hints(tags) if tags is not None else None
+    return decode.decode(bt, dead, halves, params, hints)
+
+
 def run(out: Path) -> None:
-    """Full pipeline. Until the stages exist, writes a placeholder (all H on graded frames)."""
-    labels = np.full(config.N_FRAMES, "H", dtype="<U1")
-    # TODO: load -> clean -> ballfilter -> features -> deadball/labeller/model -> decode
+    """Full pipeline on BAR-ATH -> submission CSV."""
+    from possession.clean import clean_atd
+    from possession.load import load_atd, load_smart_tagging
+
+    params = config.load_params()
+    tr = clean_atd(load_atd(), params)
+    labels = label_tracking(tr, config.HALVES, params, tags=load_smart_tagging())
     submission.write(labels, out)
     print(f"wrote {out}")
 
@@ -64,6 +79,7 @@ def main() -> None:
     p_val = sub.add_parser("validate")
     p_val.add_argument("path", type=Path)
     sub.add_parser("check-data")
+    sub.add_parser("tune", help="stage 7: tune decoder and dead-ball dials on spellF1 over degraded IDSSE")
     p_ix = sub.add_parser("idsse", help="download + convert + degrade the IDSSE matches")
     p_ix.add_argument("matches", nargs="*")
     p_bench = sub.add_parser("bench", help="score pipelines on the degraded IDSSE matches")
@@ -83,6 +99,10 @@ def main() -> None:
         sys.exit(1 if any(not p.startswith("warning") for p in problems) else 0)
     elif args.cmd == "clean":
         stage1(args.source)
+    elif args.cmd == "tune":
+        from possession import tune
+
+        tune.main()
     elif args.cmd == "check-data":
         sys.exit(check_data())
     elif args.cmd == "idsse":

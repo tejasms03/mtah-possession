@@ -121,15 +121,28 @@ def to_tracking(frame_id: np.ndarray, players: np.ndarray, ball: np.ndarray, tea
     return Tracking(ball=b, px=px, py=py, ps=ps, team=np.asarray(team))
 
 
-def load_smart_tagging() -> pd.DataFrame:
-    """Smart Tagging intervals with start_frame / end_frame columns added."""
-    from kloppy import sportscode
+def load_smart_tagging(path: Path | None = None) -> pd.DataFrame:
+    """Smart Tagging intervals: code, type, team ("H"/"A"/""), start_frame, end_frame.
 
-    ev = sportscode.load(asset_paths()["smart_tagging"]).to_df()
-    ev["start_frame"] = (ev["timestamp"].dt.total_seconds() * FPS).round().astype(int)
-    ev["end_frame"] = (ev["end_timestamp"].dt.total_seconds() * FPS).round().astype(int)
-    ev["code"] = ev["code"].str.upper()
-    return ev
+    The XML is a flat list of <instance> with <start>/<end> in seconds and <label> group/text
+    pairs. Team names in the file: "Barcelona" -> H, "Atletic Club" -> A, "N/A" -> "".
+    """
+    import xml.etree.ElementTree as ET
+
+    root = ET.parse(path or asset_paths()["smart_tagging"]).getroot()
+    teams = {"Barcelona": "H", "Atletic Club": "A"}
+    rows = []
+    for inst in root.iter("instance"):
+        labels = {lab.findtext("group"): lab.findtext("text") for lab in inst.findall("label")}
+        start, end = float(inst.findtext("start")), float(inst.findtext("end"))
+        rows.append({
+            "code": inst.findtext("code").strip().upper(),
+            "type": labels.get("Type", ""),
+            "team": teams.get(labels.get("Team", ""), ""),
+            "start_frame": int(round(start * FPS)),
+            "end_frame": int(round(end * FPS)),
+        })
+    return pd.DataFrame(rows).sort_values(["start_frame", "code"], kind="stable").reset_index(drop=True)
 
 
 def load_homography(source: str = "tactical") -> tuple[np.ndarray, np.ndarray, np.ndarray]:

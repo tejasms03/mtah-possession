@@ -33,13 +33,37 @@ control:
   consecutive_touches: 2
 
 dead_ball:
-  min_duration_s: null           # phase 0: shortest D run in the public GT
-  restart_speed_mps: 3.0
+  out_margin_m: 0.5              # ball seen this far beyond a line = out
+  still_speed_mps: 0.5           # ball slower than this = still
+  speed_ref_mps: 1.8             # team mean speed below this leans dead (public window: D 1.1-1.5, live 2.2-3.5)
+  w_speed: 3.0                   # log-odds per m/s below speed_ref
+  w_out: 3.0
+  w_still: 1.0
+  w_fast_ball: 2.0               # a ball moving fast is in play
+  fast_ball_mps: 8.0
+  bias: -1.0
 
 decode:
-  lambda_ha: null                # switch penalty H<->A
-  lambda_d: null                 # penalty in/out of D
-  switch_offset_frames: 0        # phase 0: GT switch timing vs first touch
+  temperature: 0.1               # scales all per-frame evidence (neighbouring frames are correlated)
+  lambda_ha: 8.0                 # cost of an H<->A switch away from any touch
+  lambda_ha_touch: 2.0           # ... within touch_window_frames of a detected touch
+  touch_window_frames: 12
+  lambda_d: 3.0                  # cost of entering or leaving D
+  min_possession_frames: 15      # 0.6 s; the public GT has possessions as short as 0.8 s
+  min_dead_frames: 50            # 2 s
+  w_touch: 20.0                  # log-odds for the touching team at a touch frame
+  w_control: 1.0                 # per frame, ball within control_radius of one team and clear of the other
+  control_radius_m: 1.5
+  free_radius_m: 3.0
+  w_tag_dead: 3.0                # Smart Tagging set piece: dead around its start
+  tag_dead_before: 50
+  tag_dead_after: 50
+  w_tag_team: 2.0                # ... and the named team restarts
+  tag_team_frames: 375           # 15 s after the tag start
+  switch_offset_frames: 0        # stage 6: measured lag correction
+
+idsse_bench:
+  merge_blip_s: 2.0              # merge A-H-A blips shorter than this: 3.5 possessions/min vs public GT 3.4
 
 model:
   window_s: 2.0
@@ -68,3 +92,4 @@ idsse_degrade:                   # calibrated to BAR-ATH tactical ATD aggregates
   dup_offset_m: 0.7
   pos_noise_m: 0.15
   speed_smooth_frames: 5
+  speed_method: displacement     # changes the cache key: speeds() fixed 2026-11-12
