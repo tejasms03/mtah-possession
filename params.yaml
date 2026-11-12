@@ -85,6 +85,9 @@ model:
   max_leaf_nodes: 31
   min_samples_leaf: 300          # high: neighbouring frames are near copies
   l2: 1.0
+  ensemble:
+    size: 5                      # v11b: average of 5 members on different frame slices (1 = plain model, v7)
+    max_features: 0.8            # members only: share of features tried per split
   own:                           # weak dead/alive labels from our own match (Smart Tagging set pieces)
     use: true
     tag_window_s: 2.0            # dead within +-2 s of each set-piece tag start

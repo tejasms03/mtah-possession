@@ -29,7 +29,7 @@ def make_model(params: dict) -> HistGradientBoostingClassifier:
     return HistGradientBoostingClassifier(
         learning_rate=p["learning_rate"], max_iter=p["max_iter"], max_leaf_nodes=p["max_leaf_nodes"],
         min_samples_leaf=p["min_samples_leaf"], l2_regularization=p["l2"], early_stopping=False,
-        random_state=p["seed"])
+        max_features=p.get("max_features", 1.0), random_state=p["seed"])
 
 
 def prepare(tr, halves, pitch, params: dict, gt=None) -> dict:
@@ -103,16 +103,16 @@ def dead_keep(params: dict) -> np.ndarray:
     return np.array([not c.startswith(drop) for c in dead_columns(params)])
 
 
-def rows(prep: dict, step: int) -> np.ndarray:
+def rows(prep: dict, step: int, offset: int = 0) -> np.ndarray:
     idx = np.flatnonzero(prep["gt"] != "X")
-    return idx[::step]
+    return idx[offset::step]
 
 
 def training_sets(preps: list[dict], params: dict):
     step = params["model"]["row_step"]
     Xa, ya, Xb, yb = [], [], [], []
     for p in preps:
-        r = rows(p, step)
+        r = rows(p, step, params["model"].get("row_offset", 0))
         Xa.append(p["dead"][r][:, dead_keep(params)])
         ya.append(p["gt"][r] == "D")
         live = r[np.isin(p["gt"][r], ["H", "A"])]
@@ -218,13 +218,17 @@ def fit(preps: list[dict], params: dict, own=None, own_team=None):
         Xb = np.concatenate([Xb, XH, XA])
         yb = np.concatenate([yb, lab == "H", lab == "A"])
         wb = np.concatenate([wb, np.full(2 * len(lab), params["model"]["own_team"]["weight"])])
-    a, b = make_model(params).fit(Xa, ya, sample_weight=wa), make_model(params).fit(Xb, yb, sample_weight=wb)
+    # weights for B only when own-team rows are used: passing all-ones weights changes how sklearn
+    # samples rows to place its bin thresholds (>200k rows), so the model differs from plain fit
+    a = make_model(params).fit(Xa, ya, sample_weight=wa)
+    b = make_model(params).fit(Xb, yb, sample_weight=wb if own_team is not None else None)
     full = None
     met = [p for p in preps if str(p.get("id", "")).startswith("MET")]
     if params["model"]["dead_metrica_full"] and met:
         step = params["model"]["row_step"]
-        X = np.concatenate([p["dead"][rows(p, step)] for p in met])
-        y = np.concatenate([p["gt"][rows(p, step)] == "D" for p in met])
+        off = params["model"].get("row_offset", 0)
+        X = np.concatenate([p["dead"][rows(p, step, off)] for p in met])
+        y = np.concatenate([p["gt"][rows(p, step, off)] == "D" for p in met])
         w = np.ones(len(y))
         if own is not None:
             X, y = np.concatenate([X, Xo]), np.concatenate([y, yo])
@@ -256,6 +260,9 @@ def predict(models, prep: dict, params: dict) -> tuple[np.ndarray, np.ndarray]:
 
 def out_of_fold(preps: list[dict], params: dict, log=print) -> None:
     """Adds prep['oof_dead'] and prep['oof_team'] from models that never saw that match."""
+    from possession.progress import Progress
+
+    bar = Progress("leave-one-out", len(preps))
     for i, p in enumerate(preps):
         models = fit([q for j, q in enumerate(preps) if j != i], params)
         p["oof_dead"], p["oof_team"] = predict(models, p, params)
@@ -263,4 +270,34 @@ def out_of_fold(preps: list[dict], params: dict, log=print) -> None:
         live = np.isin(g, ["H", "A"])
         acc_d = ((p["oof_dead"] > 0) == (g == "D"))[g != "X"].mean()
         acc_t = ((p["oof_team"] > 0) == (g == "H"))[live].mean()
-        log(f"  {p['id']}: dead/alive acc {acc_d:.3f}  team acc (live) {acc_t:.3f}", flush=True)
+        bar.step(f"{p['id']}: dead/alive acc {acc_d:.3f}  team acc (live) {acc_t:.3f}")
+
+
+def member_params(params: dict, k: int) -> dict:
+    """Ensemble member k: its own seed, its own slice of frames (offset k of every row_step-th),
+    and a random share of features per split. With ensemble size 1 this is exactly the plain model."""
+    q = copy.deepcopy(params)
+    n = params["model"]["ensemble"]["size"]
+    if n > 1:
+        q["model"]["seed"] = params["model"]["seed"] + k
+        q["model"]["row_offset"] = k % params["model"]["row_step"]
+        q["model"]["max_features"] = params["model"]["ensemble"]["max_features"]
+    return q
+
+
+def fit_ensemble(preps: list[dict], params: dict, own=None, own_team=None, label: str = "train") -> list:
+    from possession.progress import Progress
+
+    n = params["model"]["ensemble"]["size"]
+    bar = Progress(label, n)
+    members = []
+    for k in range(n):
+        members.append(fit(preps, member_params(params, k), own, own_team))
+        bar.step(f"model {k + 1}/{n}")
+    return members
+
+
+def predict_ensemble(members: list, prep: dict, params: dict) -> tuple[np.ndarray, np.ndarray]:
+    """Mean of the members' dead and team log-odds."""
+    out = [predict(m, prep, member_params(params, k)) for k, m in enumerate(members)]
+    return np.mean([d for d, _ in out], axis=0), np.mean([t for _, t in out], axis=0)

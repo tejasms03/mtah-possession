@@ -91,8 +91,11 @@ MODEL_GRID = {
 
 
 def search(preps, params, grid=GRID, sweeps=2, log=print):
+    from possession.progress import Progress
+
     best = copy.deepcopy(params)
     best_score, _ = evaluate(preps, best)
+    bar = Progress("tune", sweeps * len(grid))
     log(f"start  spellF1 {best_score:.4f}", flush=True) if log is print else log(f"start  spellF1 {best_score:.4f}")
     for sweep in range(sweeps):
         for key, values in grid.items():
@@ -104,7 +107,7 @@ def search(preps, params, grid=GRID, sweeps=2, log=print):
                 s, _ = evaluate(preps, trial)
                 if s > best_score + 1e-6:
                     best, best_score = trial, s
-            log(f"sweep {sweep + 1}  {key} = {get(best, key)}  spellF1 {best_score:.4f}", flush=True) if log is print else log(f"sweep {sweep + 1}  {key} = {get(best, key)}  spellF1 {best_score:.4f}")
+            bar.step(f"sweep {sweep + 1}  {key} = {get(best, key)}  spellF1 {best_score:.4f}")
     return best, best_score
 
 

@@ -25,10 +25,18 @@ def label_with_models(tr, halves, params, tags=None, pitch=None) -> np.ndarray:
     from possession import deadball, decode, model
 
     pitch = pitch or (config.PITCH_LENGTH_M, config.PITCH_WIDTH_M)
-    preps = [model.prepare_idsse(m, params) for m in model.external_matches()]
-    models = model.fit(preps, params)
+    from possession.progress import Progress
+
+    ids = model.external_matches()
+    bar = Progress("load outside matches", len(ids))
+    preps = []
+    for m_id in ids:
+        preps.append(model.prepare_idsse(m_id, params))
+        bar.step(m_id)
+    models = model.fit_ensemble(preps, params, label="train pass 1 (outside matches)")
+    print("[features] building our match's features", flush=True)
     prep = model.prepare(tr, halves, pitch, params)
-    dead, team = model.predict(models, prep, params)
+    dead, team = model.predict_ensemble(models, prep, params)
     if params["model"]["own"]["use"] and tags is not None:
         # second pass: retrain the dead models with weak labels from our own match
         idx, y = model.own_match_rows(prep, tags, dead, params)
@@ -38,8 +46,9 @@ def label_with_models(tr, halves, params, tags=None, pitch=None) -> np.ndarray:
             ti, tl = model.own_team_rows(prep, tags, params)
             print(f"own-match team rows: {int((tl == 'H').sum())} H, {int((tl == 'A').sum())} A", flush=True)
             own_team = (prep["own_H"][ti], prep["own_A"][ti], tl)
-        models = model.fit(preps, params, own=(prep["dead"][idx], y), own_team=own_team)
-        dead, team = model.predict(models, prep, params)
+        models = model.fit_ensemble(preps, params, own=(prep["dead"][idx], y), own_team=own_team,
+                                    label="train pass 2 (+ our set-piece tags)")
+        dead, team = model.predict_ensemble(models, prep, params)
     m = params["model"]
     dead = m["w_dead"] * dead + m["dead_bias"]
     hints = deadball.set_piece_hints(tags) if tags is not None else None

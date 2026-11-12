@@ -28,7 +28,7 @@ public on submission day, after checking no data is in it), `<team>.pdf` technic
 
 ## 2. Where things stand
 
-**Best file: v7**, saved as `outputs/saved/BEST.csv` (local only, gitignored), produced by the
+**Best file: v11b** (5-model average of v7's setup; public check 0.600, macroF1 0.861), saved as `outputs/saved/BEST.csv`; previously v7 (local only, gitignored), produced by the
 committed code at commit `070067d` with `params.yaml` as committed.
 
 | version | public spellF1 | macroF1 | dead-ball F1 | note |
