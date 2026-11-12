@@ -85,6 +85,15 @@ model:
   max_leaf_nodes: 31
   min_samples_leaf: 300          # high: neighbouring frames are near copies
   l2: 1.0
+  own:                           # weak dead/alive labels from our own match (Smart Tagging set pieces)
+    use: true
+    tag_window_s: 2.0            # dead within +-2 s of each set-piece tag start
+    live_clear_s: 20.0           # live examples at least this far from any set-piece tag
+    live_ball_speed_mps: 5.0     # ... with the ball seen moving this fast
+    live_max_pdead: 0.3          # ... and the outside-data model already saying live
+    weight: 5.0                  # per-row weight vs outside-match rows
+    combine: none                # none | mean3 | max: separate our-match dead model (A-own), averaged or either-or
+    min_samples_leaf: 50         # A-own has ~1,200 dead rows, so smaller leaves
   dead_metrica_full: true        # average model A with a Metrica-only dead model that keeps ball motion
   dead_drop_prefixes: [ball_speed, ball_still_s, touch_since, touch_until, d1_min, n5_sum]  # DFL freezes the ball at stoppages
   w_dead: 0.5                    # decoder: weight on model A log-odds

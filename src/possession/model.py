@@ -12,6 +12,7 @@ Honest scores: `out_of_fold` predicts each IDSSE match with models trained on th
 Owner: person 4.
 """
 
+import copy
 import pickle
 
 import numpy as np
@@ -120,28 +121,93 @@ def training_sets(preps: list[dict], params: dict):
     return np.concatenate(Xa), np.concatenate(ya), np.concatenate(Xb), np.concatenate(yb)
 
 
-def fit(preps: list[dict], params: dict):
-    """(model A, model B, model A-full or None). Model A-full is a second dead-ball model on the
-    Metrica matches only, with every feature including ball motion: Metrica's ball moves at
-    stoppages like ours, so there a hard kick out of stillness is a genuine restart cue."""
+def own_match_rows(prep: dict, tags, dead_logodds: np.ndarray, params: dict):
+    """Weak dead/alive labels from our own match (all algorithmic, no hand labels).
+
+    dead: within +-tag_window_s of each Smart Tagging SET PIECE start (the tag sits inside the
+          stoppage: both tags in the public window do).
+    live: ball seen and moving faster than live_ball_speed_mps, a detected touch within 1 s, at
+          least live_clear_s from any set-piece tag, and the outside-data model already says live.
+    The public ground-truth window is left out so the public check stays honest.
+    Returns (frame indices, labels as bool dead)."""
+    from possession.config import FPS, PUBLIC_GT_FRAMES
+
+    p = params["model"]["own"]
+    n = len(dead_logodds)
+    graded = np.zeros(n, dtype=bool)
+    for _, a, b in prep["halves"]:
+        graded[a : b + 1] = True
+    graded[PUBLIC_GT_FRAMES[0] : PUBLIC_GT_FRAMES[1] + 1] = False
+
+    starts = tags.loc[tags["code"] == "SET PIECES", "start_frame"].to_numpy()
+    near_tag = np.zeros(n, dtype=bool)
+    dead = np.zeros(n, dtype=bool)
+    w, clear = int(p["tag_window_s"] * FPS), int(p["live_clear_s"] * FPS)
+    for f in starts:
+        dead[max(0, f - w) : min(n, f + w + 1)] = True
+        near_tag[max(0, f - clear) : min(n, f + clear + 1)] = True
+    dead &= graded
+
+    bt = prep["bt"]
+    touch_near = np.convolve(bt.touch.astype(float), np.ones(2 * FPS + 1), "same") > 0
+    live = (graded & ~near_tag & bt.observed & (np.nan_to_num(bt.speed) > p["live_ball_speed_mps"])
+            & touch_near & (dead_logodds < np.log(p["live_max_pdead"] / (1 - p["live_max_pdead"]))))
+    step = params["model"]["row_step"]
+    idx_dead, idx_live = np.flatnonzero(dead)[::step], np.flatnonzero(live)[::step]
+    idx = np.concatenate([idx_dead, idx_live])
+    y = np.concatenate([np.ones(len(idx_dead), bool), np.zeros(len(idx_live), bool)])
+    return idx, y
+
+
+def fit(preps: list[dict], params: dict, own=None):
+    """(model A, model B, model A-full or None, model A-own or None).
+
+    Model A-full is a second dead-ball model on the Metrica matches only, with every feature
+    including ball motion: Metrica's ball moves at stoppages like ours, so there a hard kick out
+    of stillness is a genuine restart cue.
+    own: optional (dead matrix rows, bool labels) from our own match (own_match_rows), added to
+    both dead models with weight model.own.weight, and (combine mean3/max) trained alone as
+    model A-own."""
     Xa, ya, Xb, yb = training_sets(preps, params)
-    a, b = make_model(params).fit(Xa, ya), make_model(params).fit(Xb, yb)
+    wa = np.ones(len(ya))
+    keep = dead_keep(params)
+    if own is not None:
+        Xo, yo = own
+        Xa = np.concatenate([Xa, Xo[:, keep]])
+        ya = np.concatenate([ya, yo])
+        wa = np.concatenate([wa, np.full(len(yo), params["model"]["own"]["weight"])])
+    a, b = make_model(params).fit(Xa, ya, sample_weight=wa), make_model(params).fit(Xb, yb)
     full = None
     met = [p for p in preps if str(p.get("id", "")).startswith("MET")]
     if params["model"]["dead_metrica_full"] and met:
         step = params["model"]["row_step"]
         X = np.concatenate([p["dead"][rows(p, step)] for p in met])
         y = np.concatenate([p["gt"][rows(p, step)] == "D" for p in met])
-        full = make_model(params).fit(X, y)
-    return a, b, full
+        w = np.ones(len(y))
+        if own is not None:
+            X, y = np.concatenate([X, Xo]), np.concatenate([y, yo])
+            w = np.concatenate([w, np.full(len(yo), params["model"]["own"]["weight"])])
+        full = make_model(params).fit(X, y, sample_weight=w)
+    own_model = None
+    if own is not None and params["model"]["own"]["combine"] in ("mean3", "max"):
+        q = copy.deepcopy(params)
+        q["model"]["min_samples_leaf"] = params["model"]["own"]["min_samples_leaf"]
+        own_model = make_model(q).fit(Xo, yo)
+    return a, b, full, own_model
 
 
 def predict(models, prep: dict, params: dict) -> tuple[np.ndarray, np.ndarray]:
     """(dead log-odds, H-vs-A log-odds) per frame."""
-    a, b, full = models
+    a, b, full, own_model = models if len(models) == 4 else (*models, None)
     dead = a.decision_function(prep["dead"][:, dead_keep(params)])
     if full is not None:
         dead = (dead + full.decision_function(prep["dead"])) / 2
+    if own_model is not None:
+        mine = own_model.decision_function(prep["dead"])
+        if params["model"]["own"]["combine"] == "max":      # either-or: dead if either model says so
+            dead = np.maximum(dead, mine)
+        else:                                               # mean3: our-match model as a third vote
+            dead = (2 * dead + mine) / 3
     team = (b.decision_function(prep["own_H"]) - b.decision_function(prep["own_A"])) / 2
     return dead, team
 

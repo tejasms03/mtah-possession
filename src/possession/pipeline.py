@@ -25,9 +25,16 @@ def label_with_models(tr, halves, params, tags=None, pitch=None) -> np.ndarray:
     from possession import deadball, decode, model
 
     pitch = pitch or (config.PITCH_LENGTH_M, config.PITCH_WIDTH_M)
-    models = model.fit([model.prepare_idsse(m, params) for m in model.external_matches()], params)
+    preps = [model.prepare_idsse(m, params) for m in model.external_matches()]
+    models = model.fit(preps, params)
     prep = model.prepare(tr, halves, pitch, params)
     dead, team = model.predict(models, prep, params)
+    if params["model"]["own"]["use"] and tags is not None:
+        # second pass: retrain the dead models with weak labels from our own match
+        idx, y = model.own_match_rows(prep, tags, dead, params)
+        print(f"own-match rows: {int(y.sum())} dead, {int((~y).sum())} live", flush=True)
+        models = model.fit(preps, params, own=(prep["dead"][idx], y))
+        dead, team = model.predict(models, prep, params)
     m = params["model"]
     dead = m["w_dead"] * dead + m["dead_bias"]
     hints = deadball.set_piece_hints(tags) if tags is not None else None
