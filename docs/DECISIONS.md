@@ -14,6 +14,11 @@ document, so record what was tried and dropped as well as what was kept.
 | 2026-11-07 | Decoder is the centrepiece, tuned directly on spellF1 (leave one IDSSE match out) | | PathCRF: constrained Viterbi +8 pts event F1; action segmentation: refinement triples segment F1 at flat frame accuracy | |
 | 2026-11-07 | Two models: in play vs dead, then H vs A | | dead/alive and possession use different evidence (Borghesi ablations) | |
 | 2026-11-07 | Ball filter only bridges short gaps and finds touches | | no football evidence for IMM; rebuild-ball-then-rules scored 48% in PathCRF | |
+| 2026-11-07 | IDSSE match IDs from kloppy, not the HF dataset card | J03WMX J03WN1 J03WOH J03WOY J03WPY J03WQQ J03WR9 | card lists J03WPF/J03WQF, which have no files in pysport/idsse-data; kloppy's table matches the files | |
+| 2026-11-07 | IDSSE labels: D where BallStatus dead, else BallPossession team | | same mechanical derivation as the organisers' GT (CHALLENGE: "D where the tracking marks the ball dead, otherwise the owning team") | |
+| 2026-11-07 | IDSSE possession is touch-level, unlike BAR-ATH GT | J03WMX: 511 spells, median 3.0 s, 37% < 2 s | BAR-ATH public GT: 17 possessions, mean 14.2 s. Bench rewards flicker the BAR-ATH GT punishes; open question whether to add a merged "controlled" label variant | |
+| 2026-11-07 | Degrade calibrated to BAR-ATH aggregates, not random dropout | `params.yaml: idsse_degrade` | ball gaps are long runs (see phase 0); per match after degrading: ball missing 40-42%, 140-170 gaps, 19.5-20.4 visible players, slot runs 22-30 s median, ~26 slots (BAR-ATH 46) | |
+| 2026-11-07 | Bench baseline = organisers' baseline_smooth50 on degraded IDSSE | spellF1 0.179 mean over 7 matches (range 0.144-0.196) | close to its 0.2433 on BAR-ATH, so the damage is about as hard as our data | |
 | 2026-11-07 | Own ATD parser instead of kloppy for the raw txt | | format: `frame:` 46 slots (tactical) `x,y,speed` `;`-separated `:` ball `x,y,s`; the third ball value is speed `s` (metadata `BallChannelRef s`), present on only 8.7% of tactical frames with a ball; kloppy only needed for slot→team | |
 | 2026-11-09 | Plans merged: dead ball and boundary timing are the main error, not team identity | | team PDF: baseline 83–89% team-correct on live frames, D recall 8–34%; ball out ~40% of LaLiga time (CIES) | |
 | 2026-11-09 | Soft switch cost λ_t = λ0 − α·b_t instead of hard touch gating | | one DP pass, cheap switches at real events; replaces a hard rule that fails when a touch is missed | |
@@ -26,7 +31,11 @@ document, so record what was tried and dropped as well as what was kept.
 
 ## Phase 0 audit
 
-- ball-gap histogram:
+- ball-gap histogram (tactical, graded frames): ball missing 40.7%; 150 gaps, length p10/50/90/99
+  = 0.5 / 10.7 / 33.8 / 104.8 s; visible runs 2.2 / 13.8 / 61.7 / 127.8 s. Players within 5 m of the
+  ball just before a gap: 1.60 vs 1.41 on all visible frames (crowding raises the gap rate a little).
+- track slots (tactical, graded): 46 slots; fragments p10/50/90 = 2.6 / 35 / 285 s; 20.5 visible
+  players per frame, > 22 on 2.4% of frames; same-team pairs within 1 m: 0.08 per team-frame.
 - ball / player jitter:
 - public-GT boundaries (frame, type, cause, ball visible?, GT timing vs first touch):
 - attacking direction per half:

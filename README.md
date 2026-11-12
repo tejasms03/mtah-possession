@@ -27,6 +27,8 @@ Then:
 | `make submission TEAM=<name>` | full pipeline → `outputs/<name>.csv`, then validates it |
 | `make eval TEAM=<name>` | scores it on the public 5 minutes with the organisers' scorer |
 | `make verify` | regenerates and checks the file is byte-identical to the recorded hash |
+| `uv run possession idsse` | downloads, converts and degrades the 7 IDSSE matches into `external_data/idsse/` (~2.6 GB, ~10 min) |
+| `uv run possession bench [pipeline ...]` | scores pipelines on the degraded IDSSE matches → `outputs/bench/<pipeline>.csv` |
 
 ## Layout
 
@@ -44,6 +46,7 @@ src/possession/
   sanity.py       full-match sanity panel and public-GT boundary audit
   submission.py   write and validate the CSV
   external/idsse.py  IDSSE download, load, degrade
+  external/bench.py  score any pipeline on the 7 degraded IDSSE matches
 params.yaml       every threshold
 docs/             PLAN, FEATURES, DECISIONS, challenge SUMMARY
 ```

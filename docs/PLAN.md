@@ -23,7 +23,7 @@ only at real events and on time. The model choice (LightGBM vs NN) matters least
 ```
 raw ATD ─► 1 clean ─► 2 touches + short gap bridging ─► 3 notes per frame (multi-scale windows)
                                                               │
-   IDSSE (7 Bundesliga, labelled) ──► damage to match our ATD ┤   Metrica samples: label convention
+   IDSSE (7 DFL league, labelled) ──► damage to match our ATD ┤   Metrica samples: label convention
                                                               ▼
    4a dead-ball evidence: stasis, ball out, dropout runs,  4b LightGBM A: P(dead)
       Smart Tagging set pieces, [whistle if audio exists]   4c LightGBM B: P(Barça | live)
