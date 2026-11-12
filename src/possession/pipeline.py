@@ -33,7 +33,12 @@ def label_with_models(tr, halves, params, tags=None, pitch=None) -> np.ndarray:
         # second pass: retrain the dead models with weak labels from our own match
         idx, y = model.own_match_rows(prep, tags, dead, params)
         print(f"own-match rows: {int(y.sum())} dead, {int((~y).sum())} live", flush=True)
-        models = model.fit(preps, params, own=(prep["dead"][idx], y))
+        own_team = None
+        if params["model"]["own_team"]["use"]:
+            ti, tl = model.own_team_rows(prep, tags, params)
+            print(f"own-match team rows: {int((tl == 'H').sum())} H, {int((tl == 'A').sum())} A", flush=True)
+            own_team = (prep["own_H"][ti], prep["own_A"][ti], tl)
+        models = model.fit(preps, params, own=(prep["dead"][idx], y), own_team=own_team)
         dead, team = model.predict(models, prep, params)
     m = params["model"]
     dead = m["w_dead"] * dead + m["dead_bias"]

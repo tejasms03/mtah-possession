@@ -94,6 +94,12 @@ model:
     weight: 5.0                  # per-row weight vs outside-match rows
     combine: none                # none | mean3 | max: separate our-match dead model (A-own), averaged or either-or
     min_samples_leaf: 50         # A-own has ~1,200 dead rows, so smaller leaves
+  own_team:                      # weak whose-ball labels from our own match (runs of same-team touches)
+    use: false                   # item 1, written but NOT yet tested; true = experiment v10
+    min_touches: 3               # at least this many consecutive touches by one team
+    max_gap_s: 3.0               # ... no more than this apart
+    clear_s: 5.0                 # away from any set-piece tag
+    weight: 3.0
   dead_metrica_full: true        # average model A with a Metrica-only dead model that keeps ball motion
   dead_drop_prefixes: [ball_speed, ball_still_s, touch_since, touch_until, d1_min, n5_sum]  # DFL freezes the ball at stoppages
   w_dead: 0.5                    # decoder: weight on model A log-odds

@@ -159,7 +159,42 @@ def own_match_rows(prep: dict, tags, dead_logodds: np.ndarray, params: dict):
     return idx, y
 
 
-def fit(preps: list[dict], params: dict, own=None):
+def own_team_rows(prep: dict, tags, params: dict, include_public: bool = False):
+    """Weak whose-ball labels from our own match: frames inside a run of at least
+    `min_touches` consecutive touches by one team (from its first to its last touch of the run),
+    ball seen on the frame, at least `clear_s` from any set-piece tag, public window left out.
+    Returns (frame indices, team labels "H"/"A")."""
+    from possession.config import FPS, PUBLIC_GT_FRAMES
+
+    p = params["model"]["own_team"]
+    bt = prep["bt"]
+    n = len(bt.x)
+    ok = np.zeros(n, dtype=bool)
+    for _, a, b in prep["halves"]:
+        ok[a : b + 1] = True
+    if not include_public:
+        ok[PUBLIC_GT_FRAMES[0] : PUBLIC_GT_FRAMES[1] + 1] = False
+    clear = int(p["clear_s"] * FPS)
+    for f in tags.loc[tags["code"] == "SET PIECES", "start_frame"]:
+        ok[max(0, f - clear) : min(n, f + clear + 1)] = False
+    ok &= bt.observed
+
+    ti = np.flatnonzero(bt.touch)
+    tt = bt.touch_team[ti]
+    label = np.full(n, "", dtype="<U1")
+    k = 0
+    while k < len(ti):
+        j = k
+        while j + 1 < len(ti) and tt[j + 1] == tt[k] and ti[j + 1] - ti[j] <= p["max_gap_s"] * FPS:
+            j += 1
+        if j - k + 1 >= p["min_touches"] and tt[k] in ("H", "A"):
+            label[ti[k] : ti[j] + 1] = tt[k]
+        k = j + 1
+    idx = np.flatnonzero(ok & (label != ""))[:: params["model"]["row_step"]]
+    return idx, label[idx]
+
+
+def fit(preps: list[dict], params: dict, own=None, own_team=None):
     """(model A, model B, model A-full or None, model A-own or None).
 
     Model A-full is a second dead-ball model on the Metrica matches only, with every feature
@@ -176,7 +211,14 @@ def fit(preps: list[dict], params: dict, own=None):
         Xa = np.concatenate([Xa, Xo[:, keep]])
         ya = np.concatenate([ya, yo])
         wa = np.concatenate([wa, np.full(len(yo), params["model"]["own"]["weight"])])
-    a, b = make_model(params).fit(Xa, ya, sample_weight=wa), make_model(params).fit(Xb, yb)
+    wb = np.ones(len(yb))
+    if own_team is not None:
+        # own_team: (own_H rows, own_A rows, labels) -> shown from both sides, like the outside data
+        XH, XA, lab = own_team
+        Xb = np.concatenate([Xb, XH, XA])
+        yb = np.concatenate([yb, lab == "H", lab == "A"])
+        wb = np.concatenate([wb, np.full(2 * len(lab), params["model"]["own_team"]["weight"])])
+    a, b = make_model(params).fit(Xa, ya, sample_weight=wa), make_model(params).fit(Xb, yb, sample_weight=wb)
     full = None
     met = [p for p in preps if str(p.get("id", "")).startswith("MET")]
     if params["model"]["dead_metrica_full"] and met:
