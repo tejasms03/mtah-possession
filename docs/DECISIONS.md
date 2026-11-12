@@ -40,6 +40,8 @@ document, so record what was tried and dropped as well as what was kept.
 | 2026-11-12 | Model A averaged with a Metrica-only dead model that keeps ball-motion features | `model.dead_metrica_full` | Metrica dead/alive acc 0.82 -> 0.91-0.95; DFL dead acc 0.66-0.76 (frozen ball unseen by the Metrica model; DFL no longer a dead-ball test). Bench Metrica 0.784 | |
 | 2026-11-12 | Dead-ball dials tuned on Metrica only, team dials on all 10; min possession >= 10 frames | outputs/tune_model6.json | Metrica optimum = v5's dead settings; v6 public check 0.514 (v4 0.521, v5 0.514), switches within 1 s 0.38 (best), D precision 0.72 recall 0.45, full-match D 47% | |
 | 2026-11-12 | v7: weak dead/alive labels from our own match (+-2 s around 60 Smart Tagging set pieces = dead; fast ball + touch, 20 s from any tag, model says live = live; public window excluded), weight 5, mixed into both dead models. Separate our-match model averaged (v8) or either-or (v9) rejected | `model.own`, combine none | public check: v7 spellF1 0.588 (best; v1 0.563, v6 0.514), macroF1 0.856, D F1 0.85 (P 0.79 R 0.92), switches within 1 s 0.47; v8 0.577; v9 0.092 (D on 81% of the match). v7 full-match D 51%: to check | |
+| 2026-11-12 | v10: model B also learns from our match's runs of >=3 same-team touches (94% correct team on the public window, 0% in dead ball; 4,582 rows, weight 3) | `model.own_team.use` kept false | public check 0.541 vs v7 0.588 (17 vs 15 possessions, D unchanged, switches within 1 s 0.45 vs 0.47). Not adopted; within one possession, so worth retrying with lower weight or only near switches | |
+| 2026-11-12 | v7 reproduces byte-identically from a fresh clone at 1 and 4 threads | `SUBMISSION_SHA256` | | |
 
 ## Phase 0 audit
 

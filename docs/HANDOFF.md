@@ -99,7 +99,7 @@ About 2-4 min. All settings in `params.yaml`, reasons in `docs/DECISIONS.md`.
    symlink `data/`, `external_data/`, `vendor/mtah`, then
    `OMP_NUM_THREADS=1 uv run possession run --out x.csv` twice and compare hashes with BEST.csv.
    The final file must be generated exactly as `make submission` does (single-threaded).
-2. **Item 1, short possessions (written, NOT tested):** `params.yaml model.own_team.use` is
+2. **Item 1, short possessions: TESTED, not adopted (v10 public 0.541 vs v7 0.588; labels were 94% right). Ideas: weight 1 instead of 3, or only frames near switches.** Original notes: `params.yaml model.own_team.use` is
    `false`. Set it true to make model B also learn from our match's runs of >=3 same-team
    touches (public window excluded). First measure those labels' accuracy on the public window
    (use `model.own_team_rows(..., include_public=True)` and compare with the public GT; it must be
