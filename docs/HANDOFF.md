@@ -91,7 +91,9 @@ About 2-4 min. All settings in `params.yaml`, reasons in `docs/DECISIONS.md`.
 
 ## 5. In flight / next steps (in order)
 
-1. **Reproducibility check.** A fresh clone of commit `070067d` was being run in
+1. **Reproducibility check: PASSED for v7.** Fresh clone, single-threaded, byte-identical to
+   BEST.csv (SHA-256 in `SUBMISSION_SHA256`; BEST.csv itself was built with 4 threads, so thread
+   count does not change the output). Re-run it after any change. Original method: a fresh clone of commit `070067d` was run in
    `/private/tmp/.../scratchpad/repro/` (1 thread and 4 threads), comparing SHA-256 with
    `outputs/saved/BEST.csv`. If you can't see its result, redo it: clone the repo elsewhere,
    symlink `data/`, `external_data/`, `vendor/mtah`, then
