@@ -45,13 +45,13 @@ dead_ball:
 
 decode:
   temperature: 0.1               # scales all per-frame evidence (neighbouring frames are correlated)
-  lambda_ha: 8.0                 # cost of an H<->A switch away from any touch
-  lambda_ha_touch: 0.5           # ... within touch_window_frames of a detected touch
+  lambda_ha: 4                 # cost of an H<->A switch away from any touch
+  lambda_ha_touch: 2           # ... within touch_window_frames of a detected touch
   touch_window_frames: 12
   lambda_d: 2                  # cost of entering or leaving D
-  min_possession_frames: 5      # 0.6 s; the public GT has possessions as short as 0.8 s
-  min_dead_frames: 25            # 2 s
-  w_touch: 20.0                  # log-odds for the touching team at a touch frame
+  min_possession_frames: 20      # 0.6 s; the public GT has possessions as short as 0.8 s
+  min_dead_frames: 50            # 2 s
+  w_touch: 0                  # log-odds for the touching team at a touch frame
   w_control: 0                 # per frame, ball within control_radius of one team and clear of the other
   control_radius_m: 1.5
   free_radius_m: 3.0
@@ -70,9 +70,16 @@ idsse_bench:
   merge_blip_s: 2.0              # merge A-H-A blips shorter than this: 3.5 possessions/min vs public GT 3.4
 
 model:
-  window_s: 2.0
   seed: 0
-  holdout_every_nth_minute: 5
+  row_step: 5                    # train on every 5th graded frame
+  learning_rate: 0.05
+  max_iter: 300                  # trees
+  max_leaf_nodes: 31
+  min_samples_leaf: 300          # high: neighbouring frames are near copies
+  l2: 1.0
+  w_dead: 0.25                    # decoder: weight on model A log-odds
+  w_team: 2                    # decoder: weight on model B log-odds
+  dead_bias: 0.0                 # decoder: shift on model A log-odds
 
 idsse_degrade:                   # calibrated to BAR-ATH tactical ATD aggregates, see DECISIONS.md
   seed: 0

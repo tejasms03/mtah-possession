@@ -55,22 +55,43 @@ def prepare(match_ids, params):
 
 
 def evaluate(preps, params) -> tuple[float, list[float]]:
+    """Mean spellF1 over preps. Uses the models' out-of-fold log-odds when a prep has them
+    (model.out_of_fold), else the hand-set dead-ball rule."""
     from possession.external.bench import _vendor
 
     pm = _vendor("possession_metrics")
     scores = []
     for p in preps:
-        dead = deadball.rule_dead_logodds(p["f"], params)
-        lab = decode.decode(p["bt"], dead, p["halves"], params)
+        if "oof_dead" in p:
+            m = params["model"]
+            dead = m["w_dead"] * p["oof_dead"] + m["dead_bias"]
+            lab = decode.decode(p["bt"], dead, p["halves"], params, model_team_llr=p["oof_team"])
+        else:
+            dead = deadball.rule_dead_logodds(p["f"], params)
+            lab = decode.decode(p["bt"], dead, p["halves"], params)
         r = pm.evaluate(pm.label_codes(p["gt"]), pm.label_codes(lab))
         scores.append(r["spell_f1_mean"])
     return float(np.mean(scores)), scores
 
 
+MODEL_GRID = {
+    "model.w_dead": [0.25, 0.5, 1, 2],
+    "model.dead_bias": [-2, -1, 0, 1, 2],
+    "model.w_team": [0.25, 0.5, 1, 2],
+    "decode.w_touch": [0, 2, 5, 10],
+    "decode.lambda_ha": [2, 4, 8, 16, 32],
+    "decode.lambda_ha_touch": [0.1, 0.5, 2, 8],
+    "decode.lambda_d": [0.5, 1, 2, 4, 8],
+    "decode.temperature": [0.05, 0.1, 0.2, 0.4],
+    "decode.min_possession_frames": [1, 5, 10, 20],
+    "decode.min_dead_frames": [5, 25, 50, 100],
+}
+
+
 def search(preps, params, grid=GRID, sweeps=2, log=print):
     best = copy.deepcopy(params)
     best_score, _ = evaluate(preps, best)
-    log(f"start  spellF1 {best_score:.4f}")
+    log(f"start  spellF1 {best_score:.4f}", flush=True) if log is print else log(f"start  spellF1 {best_score:.4f}")
     for sweep in range(sweeps):
         for key, values in grid.items():
             for v in values:
@@ -81,7 +102,7 @@ def search(preps, params, grid=GRID, sweeps=2, log=print):
                 s, _ = evaluate(preps, trial)
                 if s > best_score + 1e-6:
                     best, best_score = trial, s
-            log(f"sweep {sweep + 1}  {key} = {get(best, key)}  spellF1 {best_score:.4f}")
+            log(f"sweep {sweep + 1}  {key} = {get(best, key)}  spellF1 {best_score:.4f}", flush=True) if log is print else log(f"sweep {sweep + 1}  {key} = {get(best, key)}  spellF1 {best_score:.4f}")
     return best, best_score
 
 

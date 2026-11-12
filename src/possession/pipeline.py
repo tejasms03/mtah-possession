@@ -20,14 +20,30 @@ def label_tracking(tr, halves, params, tags=None, pitch=None) -> np.ndarray:
     return decode.decode(bt, dead, halves, params, hints)
 
 
-def run(out: Path) -> None:
+def label_with_models(tr, halves, params, tags=None, pitch=None) -> np.ndarray:
+    """Stages 2-6 with models A and B trained on all 7 degraded IDSSE matches."""
+    from possession import deadball, decode, model
+    from possession.external.idsse import MATCHES
+
+    pitch = pitch or (config.PITCH_LENGTH_M, config.PITCH_WIDTH_M)
+    models = model.fit([model.prepare_idsse(m, params) for m in MATCHES], params)
+    prep = model.prepare(tr, halves, pitch, params)
+    dead, team = model.predict(models, prep)
+    m = params["model"]
+    dead = m["w_dead"] * dead + m["dead_bias"]
+    hints = deadball.set_piece_hints(tags) if tags is not None else None
+    return decode.decode(prep["bt"], dead, halves, params, hints, model_team_llr=team)
+
+
+def run(out: Path, rules_only: bool = False) -> None:
     """Full pipeline on BAR-ATH -> submission CSV."""
     from possession.clean import clean_atd
     from possession.load import load_atd, load_smart_tagging
 
     params = config.load_params()
     tr = clean_atd(load_atd(), params)
-    labels = label_tracking(tr, config.HALVES, params, tags=load_smart_tagging())
+    label = label_tracking if rules_only else label_with_models
+    labels = label(tr, config.HALVES, params, tags=load_smart_tagging())
     submission.write(labels, out)
     print(f"wrote {out}")
 
@@ -76,6 +92,7 @@ def main() -> None:
     sub = parser.add_subparsers(dest="cmd", required=True)
     p_run = sub.add_parser("run")
     p_run.add_argument("--out", type=Path, default=Path("outputs/submission.csv"))
+    p_run.add_argument("--rules-only", action="store_true", help="fallback without models A and B")
     p_val = sub.add_parser("validate")
     p_val.add_argument("path", type=Path)
     sub.add_parser("check-data")
@@ -90,7 +107,7 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.cmd == "run":
-        run(args.out)
+        run(args.out, args.rules_only)
     elif args.cmd == "validate":
         problems = submission.validate(args.path)
         for p in problems:

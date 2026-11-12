@@ -135,10 +135,14 @@ def add_set_piece_hints(dead_logodds, team_llr, hints, params):
     return dead, llr
 
 
-def decode(bt: BallTrack, dead_logodds: np.ndarray, halves, params: dict, hints=None) -> np.ndarray:
-    """Labels (N,) "H"/"A"/"D" inside each half, "X" outside."""
+def decode(bt: BallTrack, dead_logodds: np.ndarray, halves, params: dict, hints=None,
+           model_team_llr=None) -> np.ndarray:
+    """Labels (N,) "H"/"A"/"D" inside each half, "X" outside. model_team_llr (model B's H-vs-A
+    log-odds) is added to the touch evidence when given."""
     p = params["decode"]
     team_llr = team_evidence(bt, params)
+    if model_team_llr is not None:
+        team_llr = team_llr + params["model"]["w_team"] * np.nan_to_num(model_team_llr)
     if hints is not None and len(hints):
         dead_logodds, team_llr = add_set_piece_hints(dead_logodds, team_llr, hints, params)
     e = emissions(dead_logodds, team_llr, params)
