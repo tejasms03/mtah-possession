@@ -10,11 +10,16 @@ clean:
   duplicate_radius_m: 0.3        # two same-team detections closer than this = one player
   velocity_halfwindow_frames: 3  # player velocity over ±0.12 s
 
-ball_filter:
-  measurement_noise_m: null      # phase 0: measure ball jitter
-  rolling_decel_mps2: null       # phase 1: IDSSE
-  carried_radius_m: 1.5
-  switch_prob: 0.02
+ball:
+  max_bridge_frames: 12          # bridge gaps up to 0.48 s by interpolation; longer stay unknown
+  savgol_window: 7               # Savitzky-Golay, 2nd order, 7 frames (Vidal-Codina et al. 2022)
+  savgol_order: 2
+  touch_half_window_frames: 3    # compare velocity 0.12 s before vs after
+  touch_dv_mps: 3.0              # velocity change that counts as a touch (Tracab used 5; retune)
+  touch_angle_deg: 25            # or a turn this sharp while moving (Tracab used 10; we are noisier)
+  touch_min_speed_mps: 1.5       # angle test only when the ball moves at least this fast
+  touch_radius_m: 2.0            # a player must be this close (1 m optical; wider for our noise)
+  touch_min_separation_frames: 6 # one touch per 0.24 s at most
 
 coupling:
   sigma_d_m: 1.2

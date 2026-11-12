@@ -28,6 +28,7 @@ document, so record what was tried and dropped as well as what was kept.
 | 2026-11-09 | Whistle detection optional, only if the tactical video has audio | | PDF: 93% recall / 88% precision on broadcast (Raventós 2015); DATA.md does not mention audio | |
 | 2026-11-09 | No video ball detection (WASB), no homography for ball-out | | team decision (no vision); GPU-hours to reproduce; ATD already in pitch coordinates | |
 | 2026-11-12 | Stage 1 on tactical data | | 46 slots → 22 H, 21 A, 3 other; ball missing 41.3% of graded frames; 1,582 off-pitch ball points and 2,838 duplicate player points removed, 0 detours; our speeds match ATD speed to 0.11 m/s (median); Barcelona = first metadata team = H, attacks left to right in the 1st half | |
+| 2026-11-12 | Stage 2 touches: velocity change ≥ 3 m/s or turn ≥ 25° with a player within 2 m; trust velocity only ≥ 3 frames inside a ball run | params `ball` | BAR-ATH: 2,357 touches (19.4/min), H 1,527 / A 830; public window: touch team = GT team on 84.4% of live-play touches, 2 of 162 touches in D; bridging adds only 170 frames (gaps are long). Run-edge velocity made false touches on synthetic jitter | |
 
 ## Phase 0 audit
 
