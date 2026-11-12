@@ -61,3 +61,5 @@ docs/             PLAN, FEATURES, DECISIONS, challenge SUMMARY
 
 IDSSE: Bassek, Rein, Weber, Memmert (2025). *An integrated dataset of spatiotemporal and event
 data in elite soccer.* Scientific Data 12, 195. Data © Deutsche Fußball Liga (DFL), CC-BY 4.0.
+
+Metrica Sports sample data (3 matches): https://github.com/metrica-sports/sample-data, used with acknowledgement as its README asks.

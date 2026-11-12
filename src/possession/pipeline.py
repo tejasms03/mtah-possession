@@ -23,12 +23,11 @@ def label_tracking(tr, halves, params, tags=None, pitch=None) -> np.ndarray:
 def label_with_models(tr, halves, params, tags=None, pitch=None) -> np.ndarray:
     """Stages 2-6 with models A and B trained on all 7 degraded IDSSE matches."""
     from possession import deadball, decode, model
-    from possession.external.idsse import MATCHES
 
     pitch = pitch or (config.PITCH_LENGTH_M, config.PITCH_WIDTH_M)
-    models = model.fit([model.prepare_idsse(m, params) for m in MATCHES], params)
+    models = model.fit([model.prepare_idsse(m, params) for m in model.external_matches()], params)
     prep = model.prepare(tr, halves, pitch, params)
-    dead, team = model.predict(models, prep)
+    dead, team = model.predict(models, prep, params)
     m = params["model"]
     dead = m["w_dead"] * dead + m["dead_bias"]
     hints = deadball.set_piece_hints(tags) if tags is not None else None

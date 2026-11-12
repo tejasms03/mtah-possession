@@ -75,9 +75,9 @@ def evaluate(preps, params) -> tuple[float, list[float]]:
 
 
 MODEL_GRID = {
-    "model.w_dead": [0.25, 0.5, 1, 2],
+    "model.w_dead": [0.05, 0.1, 0.25, 0.5, 1, 2],
     "model.dead_bias": [-2, -1, 0, 1, 2],
-    "model.w_team": [0.25, 0.5, 1, 2],
+    "model.w_team": [0.5, 1, 2, 4, 8],
     "decode.w_touch": [0, 2, 5, 10],
     "decode.lambda_ha": [2, 4, 8, 16, 32],
     "decode.lambda_ha_touch": [0.1, 0.5, 2, 8],
