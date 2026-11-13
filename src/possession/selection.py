@@ -67,11 +67,12 @@ def run_version(prep, train, tags, params) -> np.ndarray:
                          deadball.set_piece_hints(tags), model_team_llr=team, pitch=prep["pitch"])
 
 
-def main(versions=None) -> None:
+def main(versions=None, extra_team: bool = False) -> None:
     from possession.external.bench import _vendor
 
     pm = _vendor("possession_metrics")
     base = config.load_params()
+    base["features"]["extra_team"] = extra_team or base["features"].get("extra_team", False)
     lead = base["selection"]["tag_lead_s"]
     versions = versions or list(VERSIONS)
     ids = model.external_matches()

@@ -63,7 +63,7 @@ def prepare_idsse(match_id: str, params: dict, refresh: bool = False) -> dict:
     from possession.external.bench import bench_gt
 
     load_degraded = load_external
-    path = CACHE / f"{match_id}.pkl"
+    path = CACHE / (f"{match_id}_xt.pkl" if params["features"].get("extra_team") else f"{match_id}.pkl")
     if path.exists() and not refresh:
         with open(path, "rb") as fh:
             return pickle.load(fh)

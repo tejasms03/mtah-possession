@@ -119,7 +119,9 @@ def main() -> None:
     p_cmp = sub.add_parser("compare", help="frame-by-frame agreement between two submission CSVs")
     p_cmp.add_argument("a", type=Path)
     p_cmp.add_argument("b", type=Path)
-    sub.add_parser("select", help="choose between versions on the Metrica stand-in bench (no public window)")
+    p_sel = sub.add_parser("select", help="choose between versions on the Metrica stand-in bench (no public window)")
+    p_sel.add_argument("--versions", nargs="*", help="subset of versions (default: all)")
+    p_sel.add_argument("--extra-team", action="store_true", help="idea 2 team features on")
     sub.add_parser("tune", help="stage 7: tune decoder and dead-ball dials on spellF1 over degraded IDSSE")
     p_ix = sub.add_parser("idsse", help="download + convert + degrade the IDSSE matches")
     p_ix.add_argument("matches", nargs="*")
@@ -147,7 +149,7 @@ def main() -> None:
     elif args.cmd == "select":
         from possession import selection
 
-        selection.main()
+        selection.main(args.versions, args.extra_team)
     elif args.cmd == "tune":
         from possession import tune
 
