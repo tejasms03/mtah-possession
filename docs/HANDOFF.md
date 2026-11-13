@@ -3,7 +3,11 @@
 For whoever (human or AI assistant) picks this up next. Read this, then `docs/PLAN.md`,
 `docs/DECISIONS.md` (every decision with evidence, chronological) and `README.md`.
 
-## 0. Rule you must not break
+## 0. Rules you must not break
+
+**Organiser clarification (3 Nov, recorded in verneylmavt/more-than-a-hack-2027 ORGANIZER-CLARIFICATION.md, overrides RULES.md):** every fit, tuning, calibration or pseudo-label training must use external data only; the provided match (tracking, Smart Tagging) may only be an inference input. The public window may only check a frozen pipeline's correctness, never guide selection. Choose versions with `uv run possession select`.
+
+## 0b. Data and AI
 
 Competition T&C (vendor/mtah/OVERVIEW.md "Use of Large Language Models", FAQ.md): LLMs may be
 used anywhere, but **no competition video, dataset or extract of one may be uploaded or shown to
@@ -28,7 +32,7 @@ public on submission day, after checking no data is in it), `<team>.pdf` technic
 
 ## 2. Where things stand
 
-**Best file: v12** (v11b + idea-2 team features; chosen on the whole-match Metrica select bench, 0.7721 vs 0.7576; public check 0.588 is a format check only). Before that v11b (5-model average of v7's setup; public check 0.600, macroF1 0.861), saved as `outputs/saved/BEST.csv`; previously v7 (local only, gitignored), produced by the
+**Best file: v14** (v6 + idea-2 features + dead ball before each half's kick-off tag; NO training on the provided match, per the organisers' 3 Nov clarification; single model set). Before that **v12** (v11b + idea-2 team features; chosen on the whole-match Metrica select bench, 0.7721 vs 0.7576; public check 0.588 is a format check only). Before that v11b (5-model average of v7's setup; public check 0.600, macroF1 0.861), saved as `outputs/saved/BEST.csv`; previously v7 (local only, gitignored), produced by the
 committed code at commit `070067d` with `params.yaml` as committed.
 
 | version | public spellF1 | macroF1 | dead-ball F1 | note |

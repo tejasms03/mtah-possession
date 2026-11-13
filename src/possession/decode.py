@@ -199,6 +199,14 @@ def decode(bt: BallTrack, dead_logodds: np.ndarray, halves, params: dict, hints=
     if hints is not None and len(hints):
         dead_logodds, team_llr = add_set_piece_hints(dead_logodds, team_llr, hints, params)
     e = emissions(dead_logodds, team_llr, params)
+    if hints is not None and len(hints) and p["dead_before_kickoff"]:
+        # the ball is dead from the start of a half until its kick-off (Smart Tagging "Kick Off
+        # (Start)"), so only D is allowed there. A fixed rule on an inference input, no frame numbers.
+        starts = hints.loc[hints["type"].str.contains("Kick Off \\(Start\\)", case=False, na=False), "start_frame"]
+        for _, a, b in halves:
+            inside = starts[(starts > a) & (starts <= b)]
+            if len(inside):
+                e[a : int(inside.min()), :2] = -1e9
     cost = switch_costs(bt, len(e), params)
     min_len = (p["min_possession_frames"], p["min_possession_frames"], p["min_dead_frames"])
     out = np.full(len(e), "X", dtype="<U1")
