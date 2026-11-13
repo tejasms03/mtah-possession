@@ -124,6 +124,42 @@ def windowed(df: pd.DataFrame, windows_s, edge_cols=(), edge_s=1.0) -> pd.DataFr
     return pd.DataFrame(out).astype(np.float32)
 
 
+def extra_team(tr: Tracking, bt: BallTrack, team: str) -> pd.DataFrame:
+    """Idea 2 (off unless features.extra_team): who is the ball going to, who is under pressure,
+    and touch runs. All from the ball track and both teams' positions; no slot identities."""
+    cols, opp = tr.team == team, np.isin(tr.team, ["H", "A"]) & (tr.team != team)
+    px, py = tr.px[:, cols], tr.py[:, cols]
+    d = np.hypot(px - bt.x[:, None], py - bt.y[:, None])
+    d = np.where(np.isnan(d), np.inf, d)
+    j = d.argmin(axis=1)
+    rows = np.arange(len(d))
+    has = np.isfinite(d[rows, j]) & ~np.isnan(bt.x)
+    cx, cy = np.where(has, px[rows, j], np.nan), np.where(has, py[rows, j], np.nan)
+
+    to_x, to_y = cx - bt.x, cy - bt.y
+    dist = np.maximum(np.hypot(to_x, to_y), 0.1)
+    speed = np.nan_to_num(bt.speed)
+    approach = (np.nan_to_num(bt.vx) * to_x + np.nan_to_num(bt.vy) * to_y) / dist     # m/s towards carrier
+    heading = np.where(speed > 2.0, approach / np.maximum(speed, 1e-6), 0.0)           # cosine
+
+    od = np.hypot(tr.px[:, opp] - cx[:, None], tr.py[:, opp] - cy[:, None])
+    pressure = np.where(has, (np.nan_to_num(od, nan=np.inf) <= 3.0).sum(axis=1), np.nan)
+
+    own_touch = (bt.touch_team == team).astype(float)
+    k, n = 5 * 25, len(own_touch)
+    c = np.r_[0.0, np.cumsum(own_touch)]
+    i = np.arange(n)
+    past = c[i + 1] - c[np.maximum(0, i - k)]                 # own touches in the last 5 s
+    future = c[np.minimum(n, i + k + 1)] - c[i]               # ... and in the next 5 s
+    since_own, _ = since_until(bt.touch_team == team)
+    since_any, _ = since_until(bt.touch)
+    return pd.DataFrame({
+        "heading": np.where(has, heading, np.nan), "approach": np.where(has, approach, np.nan),
+        "pressure": pressure, "touches_past5": past, "touches_next5": future,
+        "last_toucher": (since_own <= since_any).astype(float),
+    })
+
+
 def build(tr: Tracking, bt: BallTrack, params: dict, halves, pitch) -> dict:
     """{'game': game block, 'H': H team block, 'A': A team block}, each already windowed."""
     p = params["features"]
@@ -132,6 +168,8 @@ def build(tr: Tracking, bt: BallTrack, params: dict, halves, pitch) -> dict:
     blocks = {"game": game}
     for team in ("H", "A"):
         tb = team_block(tr, bt, team, sign, pitch)
+        if p.get("extra_team"):
+            tb = pd.concat([tb, extra_team(tr, bt, team)], axis=1)
         blocks[team] = windowed(tb, p["team_windows_s"], ("d1", "n2", "cx", "vx"))
     return blocks
 

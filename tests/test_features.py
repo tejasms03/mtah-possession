@@ -33,3 +33,19 @@ def test_team_matrix_is_mirror():
     h, a = features.team_matrix(blocks, "H"), features.team_matrix(blocks, "A")
     assert h["own_d1"][0] == a["opp_d1"][0] == 1.0
     assert h["diff_d1"][0] == -a["diff_d1"][0]
+
+
+def test_extra_team_heading_and_touch_runs():
+    """Ball rolls from a Barça player straight at an Athletic player."""
+    from possession import ballfilter, config
+    n = 100
+    t = np.arange(n) / 25
+    ball = np.column_stack([30 + 10 * t, np.full(n, 34.0)])
+    px = np.column_stack([np.full(n, 29.0), np.full(n, 45.0)])
+    tr = Tracking(ball=ball, px=px, py=np.full((n, 2), 34.0), ps=np.zeros((n, 2)),
+                  team=np.array(["H", "A"]))
+    bt = ballfilter.run(tr, config.load_params())
+    a = features.extra_team(tr, bt, "A")
+    assert a["heading"].iloc[20] > 0.9          # ball at x=38, rolling straight at the player at x=45
+    h = features.extra_team(tr, bt, "H")
+    assert h["heading"].iloc[20] < -0.9         # and away from the Barça player at x=29

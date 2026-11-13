@@ -68,6 +68,7 @@ decode:
   switch_offset_frames: 0        # stage 6: measured lag correction
 
 features:
+  extra_team: false              # idea 2: heading, pressure, touch runs, last toucher (test on select first)
   team_windows_s: [0.4, 1, 2, 4]          # centred means for the whose-ball notes
   game_windows_s: [0.4, 1, 2, 4, 10, 40]   # dead-ball notes also need stoppage-length context
 
