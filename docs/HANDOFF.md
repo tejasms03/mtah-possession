@@ -28,7 +28,7 @@ public on submission day, after checking no data is in it), `<team>.pdf` technic
 
 ## 2. Where things stand
 
-**Best file: v11b** (5-model average of v7's setup; public check 0.600, macroF1 0.861), saved as `outputs/saved/BEST.csv`; previously v7 (local only, gitignored), produced by the
+**Best file: v12** (v11b + idea-2 team features; chosen on the whole-match Metrica select bench, 0.7721 vs 0.7576; public check 0.588 is a format check only). Before that v11b (5-model average of v7's setup; public check 0.600, macroF1 0.861), saved as `outputs/saved/BEST.csv`; previously v7 (local only, gitignored), produced by the
 committed code at commit `070067d` with `params.yaml` as committed.
 
 | version | public spellF1 | macroF1 | dead-ball F1 | note |
