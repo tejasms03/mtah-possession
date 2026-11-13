@@ -44,6 +44,7 @@ document, so record what was tried and dropped as well as what was kept.
 | 2026-11-12 | v7 reproduces byte-identically from a fresh clone at 1 and 4 threads | `SUBMISSION_SHA256` | | |
 | 2026-11-12 | Reproducibility bug found and fixed: model B was always fitted with all-ones sample weights after the item-1 change, which alters sklearn's bin-threshold sampling (>200k rows), so HEAD no longer regenerated v7 | `model.fit` | weights for B only when own-team rows are used; ensemble size 1 then reproduces v7 byte-identically again | |
 | 2026-11-12 | v11b: average of 5 model sets, each on a different 1-in-5 slice of frames, 80% of features per split, own seed | `model.ensemble.size: 5` | public check spellF1 0.600 (v7 0.588), macroF1 0.861 (0.856), switches within 1 s 0.53 (0.47), D F1 0.85; better or equal everywhere. New submission candidate | |
+| 2026-11-12 | v11b reproduces byte-identically from a fresh clone, single-threaded (as `make submission` runs) | SHA-256 9703d412... | single-thread run takes ~35-40 min (two training passes of 5 models) | |
 
 ## Phase 0 audit
 
