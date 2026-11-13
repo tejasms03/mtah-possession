@@ -121,7 +121,7 @@ def training_sets(preps: list[dict], params: dict):
     return np.concatenate(Xa), np.concatenate(ya), np.concatenate(Xb), np.concatenate(yb)
 
 
-def own_match_rows(prep: dict, tags, dead_logodds: np.ndarray, params: dict):
+def own_match_rows(prep: dict, tags, dead_logodds: np.ndarray, params: dict, exclude=None):
     """Weak dead/alive labels from our own match (all algorithmic, no hand labels).
 
     dead: within +-tag_window_s of each Smart Tagging SET PIECE start (the tag sits inside the
@@ -137,7 +137,9 @@ def own_match_rows(prep: dict, tags, dead_logodds: np.ndarray, params: dict):
     graded = np.zeros(n, dtype=bool)
     for _, a, b in prep["halves"]:
         graded[a : b + 1] = True
-    graded[PUBLIC_GT_FRAMES[0] : PUBLIC_GT_FRAMES[1] + 1] = False
+    ex = PUBLIC_GT_FRAMES if exclude is None else exclude
+    if ex:
+        graded[ex[0] : ex[1] + 1] = False
 
     starts = tags.loc[tags["code"] == "SET PIECES", "start_frame"].to_numpy()
     near_tag = np.zeros(n, dtype=bool)
@@ -159,7 +161,7 @@ def own_match_rows(prep: dict, tags, dead_logodds: np.ndarray, params: dict):
     return idx, y
 
 
-def own_team_rows(prep: dict, tags, params: dict, include_public: bool = False):
+def own_team_rows(prep: dict, tags, params: dict, include_public: bool = False, exclude=None):
     """Weak whose-ball labels from our own match: frames inside a run of at least
     `min_touches` consecutive touches by one team (from its first to its last touch of the run),
     ball seen on the frame, at least `clear_s` from any set-piece tag, public window left out.
@@ -172,8 +174,9 @@ def own_team_rows(prep: dict, tags, params: dict, include_public: bool = False):
     ok = np.zeros(n, dtype=bool)
     for _, a, b in prep["halves"]:
         ok[a : b + 1] = True
-    if not include_public:
-        ok[PUBLIC_GT_FRAMES[0] : PUBLIC_GT_FRAMES[1] + 1] = False
+    ex = PUBLIC_GT_FRAMES if exclude is None else exclude
+    if not include_public and ex:
+        ok[ex[0] : ex[1] + 1] = False
     clear = int(p["clear_s"] * FPS)
     for f in tags.loc[tags["code"] == "SET PIECES", "start_frame"]:
         ok[max(0, f - clear) : min(n, f + clear + 1)] = False

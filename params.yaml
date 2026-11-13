@@ -74,6 +74,9 @@ features:
 metrica:
   dead_max_s: 90                 # an event-derived dead spell never runs longer than this
 
+selection:
+  tag_lead_s: 3.0               # stand-in tags start this long before the Metrica restart event
+
 idsse_bench:
   merge_blip_s: 2.0              # merge A-H-A blips shorter than this: 3.5 possessions/min vs public GT 3.4
 

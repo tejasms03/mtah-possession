@@ -116,6 +116,10 @@ def main() -> None:
     p_val = sub.add_parser("validate")
     p_val.add_argument("path", type=Path)
     sub.add_parser("check-data")
+    p_cmp = sub.add_parser("compare", help="frame-by-frame agreement between two submission CSVs")
+    p_cmp.add_argument("a", type=Path)
+    p_cmp.add_argument("b", type=Path)
+    sub.add_parser("select", help="choose between versions on the Metrica stand-in bench (no public window)")
     sub.add_parser("tune", help="stage 7: tune decoder and dead-ball dials on spellF1 over degraded IDSSE")
     p_ix = sub.add_parser("idsse", help="download + convert + degrade the IDSSE matches")
     p_ix.add_argument("matches", nargs="*")
@@ -136,6 +140,14 @@ def main() -> None:
         sys.exit(1 if any(not p.startswith("warning") for p in problems) else 0)
     elif args.cmd == "clean":
         stage1(args.source)
+    elif args.cmd == "compare":
+        from possession import compare
+
+        compare.main(args.a, args.b)
+    elif args.cmd == "select":
+        from possession import selection
+
+        selection.main()
     elif args.cmd == "tune":
         from possession import tune
 
