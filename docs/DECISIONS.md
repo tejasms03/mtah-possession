@@ -52,6 +52,7 @@ document, so record what was tried and dropped as well as what was kept.
 | 2026-11-13 | **No training on the provided match.** Organiser clarification of 3 Nov (recorded by other teams; overrides RULES.md's pseudo-label allowance): all fitting/tuning/pseudo-label training needs external data; Smart Tagging only as an inference input. `model.own` (v7-v12) and `own_team` (v10) switched off | `model.own.use: false` | v6 + idea 2 = 0.7724 on the whole-match bench vs v12 0.7721 (tie), so nothing measurable is lost; v13 vs v12: 94.7% same labels, 46.5% vs 51.3% dead | |
 | 2026-11-13 | Ensemble back to 1 model set | `model.ensemble.size: 1` | 5-member average tied on the whole-match bench (v11b 0.7576 vs v7 0.7573); simpler wins ties | |
 | 2026-11-13 | Dead ball forced between each half's start and its Smart Tagging "Kick Off (Start)" tag (decoder constraint, no frame numbers) -> v14 = submission | `decode.dead_before_kickoff` | FAQ: 2nd half graded from 110,808, kicks off at 113,742, those 2,934 frames are all D; v12/v13 labelled ~2,000 of them H/A in spurious runs; v14: 2,902 D. Not measurable on the Metrica bench (no such window) | |
+| 2026-11-13 | v14 reproduces byte-identically from a fresh clone via `make submission` (single thread, ~15 min) | SHA-256 16def464... | | |
 
 ## Phase 0 audit
 
