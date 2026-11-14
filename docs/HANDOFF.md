@@ -32,7 +32,7 @@ public on submission day, after checking no data is in it), `<team>.pdf` technic
 
 ## 2. Where things stand
 
-**Best file: v14** (v6 + idea-2 features + dead ball before each half's kick-off tag; NO training on the provided match, per the organisers' 3 Nov clarification; single model set). Before that **v12** (v11b + idea-2 team features; chosen on the whole-match Metrica select bench, 0.7721 vs 0.7576; public check 0.588 is a format check only). Before that v11b (5-model average of v7's setup; public check 0.600, macroF1 0.861), saved as `outputs/saved/BEST.csv`; previously v7 (local only, gitignored), produced by the
+**Best file: v15** (v14 + outside training labels merged at 1.5 s + Smart Tagging set-piece hints off; whole-match bench 0.7912 vs v14 0.7457 on the same labels, every match better). Before that **v14** (v6 + idea-2 features + dead ball before each half's kick-off tag; NO training on the provided match, per the organisers' 3 Nov clarification; single model set). Before that **v12** (v11b + idea-2 team features; chosen on the whole-match Metrica select bench, 0.7721 vs 0.7576; public check 0.588 is a format check only). Before that v11b (5-model average of v7's setup; public check 0.600, macroF1 0.861), saved as `outputs/saved/BEST.csv`; previously v7 (local only, gitignored), produced by the
 committed code at commit `070067d` with `params.yaml` as committed.
 
 | version | public spellF1 | macroF1 | dead-ball F1 | note |

@@ -66,7 +66,10 @@ def prepare_idsse(match_id: str, params: dict, refresh: bool = False) -> dict:
     path = CACHE / (f"{match_id}_xt.pkl" if params["features"].get("extra_team") else f"{match_id}.pkl")
     if path.exists() and not refresh:
         with open(path, "rb") as fh:
-            return pickle.load(fh)
+            prep = pickle.load(fh)
+        # labels depend on idsse_bench.merge_blip_s, which the cache name does not record
+        prep["gt"] = bench_gt(load_degraded(match_id))
+        return prep
     m = load_degraded(match_id)
     prep = prepare(clean_atd(m.tracking, params), m.halves, m.pitch, params, gt=bench_gt(m))
     prep["id"] = match_id
