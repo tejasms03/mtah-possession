@@ -62,9 +62,13 @@ def run_version(prep, train, tags, params) -> np.ndarray:
         members = model.fit_ensemble(train, params, own=(prep["dead"][idx], y), own_team=own_team,
                                      label="  pass 2")
         dead, team = model.predict_ensemble(members, prep, params)
+    switch = None
+    if params["decode"].get("w_switch", 0):
+        switch = model.predict_switch(model.fit_switch(train, params), prep)
     m = params["model"]
     return decode.decode(prep["bt"], m["w_dead"] * dead + m["dead_bias"], prep["halves"], params,
-                         deadball.set_piece_hints(tags), model_team_llr=team, pitch=prep["pitch"])
+                         deadball.set_piece_hints(tags), model_team_llr=team, pitch=prep["pitch"],
+                         switch_logodds=switch)
 
 
 def main(versions=None, extra_team: bool = False) -> None:
@@ -75,7 +79,7 @@ def main(versions=None, extra_team: bool = False) -> None:
     base["features"]["extra_team"] = extra_team or base["features"].get("extra_team", False)
     lead = base["selection"]["tag_lead_s"]
     versions = versions or list(VERSIONS)
-    ids = model.external_matches()
+    ids = model.external_matches(base)
     preps = {m: model.prepare_idsse(m, base) for m in ids}
     mets = list(metrica.MATCHES)
     bar = Progress("select", len(versions) * len(mets))

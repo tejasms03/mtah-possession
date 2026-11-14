@@ -44,17 +44,29 @@ def prepare(tr, halves, pitch, params: dict, gt=None) -> dict:
     }
 
 
-def external_matches() -> list[str]:
-    """Every labelled outside match: 7 IDSSE (J03...) and 3 Metrica samples (MET...)."""
-    from possession.external import idsse, metrica
+def external_matches(params: dict | None = None) -> list[str]:
+    """Every labelled outside match: 7 IDSSE (J03...), 3 Metrica samples (MET...), and the downloaded
+    SkillCorner matches (SC...) when `external.skillcorner` is on (team-side experts only)."""
+    from possession.external import idsse, metrica, skillcorner
 
-    return list(idsse.MATCHES) + list(metrica.MATCHES)
+    params = params or config.load_params()
+    ids = list(idsse.MATCHES) + list(metrica.MATCHES)
+    if params.get("external", {}).get("skillcorner"):
+        ids += skillcorner.match_ids()
+    return ids
+
+
+def team_only(prep: dict) -> bool:
+    """Outside matches whose labels only cover possession by a team (no dead ball): never rows for the
+    dead-ball models."""
+    return str(prep.get("id", "")).startswith("SC")
 
 
 def load_external(match_id: str):
-    from possession.external import idsse, metrica
+    from possession.external import idsse, metrica, skillcorner
 
-    return (metrica if match_id.startswith("MET") else idsse).load_degraded(match_id)
+    src = metrica if match_id.startswith("MET") else skillcorner if match_id.startswith("SC") else idsse
+    return src.load_degraded(match_id)
 
 
 def prepare_idsse(match_id: str, params: dict, refresh: bool = False) -> dict:
@@ -116,8 +128,9 @@ def training_sets(preps: list[dict], params: dict):
     Xa, ya, Xb, yb = [], [], [], []
     for p in preps:
         r = rows(p, step, params["model"].get("row_offset", 0))
-        Xa.append(p["dead"][r][:, dead_keep(params)])
-        ya.append(p["gt"][r] == "D")
+        if not team_only(p):
+            Xa.append(p["dead"][r][:, dead_keep(params)])
+            ya.append(p["gt"][r] == "D")
         live = r[np.isin(p["gt"][r], ["H", "A"])]
         Xb += [p["own_H"][live], p["own_A"][live]]
         yb += [p["gt"][live] == "H", p["gt"][live] == "A"]
@@ -307,3 +320,49 @@ def predict_ensemble(members: list, prep: dict, params: dict) -> tuple[np.ndarra
     """Mean of the members' dead and team log-odds."""
     out = [predict(m, prep, member_params(params, k)) for k, m in enumerate(members)]
     return np.mean([d for d, _ in out], axis=0), np.mean([t for _, t in out], axis=0)
+
+
+# -- change detector (council expert #4): "does control switch between teams around here?" ------
+
+SWITCH_LAGS = (12, 25, 50)            # before/after offsets in frames: 0.5, 1, 2 s
+
+
+def switch_matrix(prep: dict, idx: np.ndarray) -> np.ndarray:
+    """Inputs for the change detector at frames idx: the game block plus, for each lag k, the size
+    of the change in H-minus-A team features from k frames before to k frames after (absolute
+    values, so the expert is team-blind). Only degraded inputs our tracking also has."""
+    d = prep["own_H"] - prep["own_A"]
+    n = len(d)
+    parts = [prep["dead"][idx]]
+    for k in SWITCH_LAGS:
+        parts.append(np.abs(d[np.minimum(idx + k, n - 1)] - d[np.maximum(idx - k, 0)]))
+    return np.nan_to_num(np.hstack(parts), nan=0.0).astype(np.float32)
+
+
+def switch_target(gt: np.ndarray, half_window: int) -> np.ndarray:
+    """True within half_window frames of a direct H<->A change in the labels."""
+    sw = np.flatnonzero(np.isin(gt[1:], ["H", "A"]) & np.isin(gt[:-1], ["H", "A"]) & (gt[1:] != gt[:-1])) + 1
+    near = np.zeros(len(gt), bool)
+    for s in sw:
+        near[max(0, s - half_window) : s + half_window] = True
+    return near
+
+
+def fit_switch(preps: list[dict], params: dict):
+    """Change detector trained on outside matches only (live frames, every row_step-th)."""
+    p = params["decode"]
+    X, y = [], []
+    for q in preps:
+        r = rows(q, params["model"]["row_step"], 2)
+        r = r[np.isin(q["gt"][r], ["H", "A"])]
+        X.append(switch_matrix(q, r))
+        y.append(switch_target(q["gt"], p["switch_half_window"])[r])
+    m = make_model(params)
+    m.fit(np.concatenate(X), np.concatenate(y))
+    return m
+
+
+def predict_switch(m, prep: dict, chunk: int = 20000) -> np.ndarray:
+    n = len(prep["dead"])
+    return np.concatenate([m.decision_function(switch_matrix(prep, np.arange(a, min(n, a + chunk))))
+                           for a in range(0, n, chunk)])

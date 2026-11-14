@@ -112,11 +112,14 @@ def _viterbi(e, min_len, cost):
     return path
 
 
-def switch_costs(bt: BallTrack, n: int, params: dict) -> np.ndarray:
+def switch_costs(bt: BallTrack, n: int, params: dict, switch_logodds=None) -> np.ndarray:
     p = params["decode"]
     cost = np.full((n, 3, 3), float(p["lambda_d"]))
     near_touch = np.convolve(bt.touch.astype(float), np.ones(2 * p["touch_window_frames"] + 1), "same") > 0
-    ha = np.where(near_touch, p["lambda_ha_touch"], p["lambda_ha"])
+    ha = np.where(near_touch, p["lambda_ha_touch"], p["lambda_ha"]).astype(float)
+    if switch_logodds is not None and p.get("w_switch", 0):
+        # change detector: a likely switch makes H<->A cheaper, an unlikely one dearer
+        ha = np.clip(ha - p["w_switch"] * (switch_logodds - p["switch_center"]), 0.0, p["switch_max_cost"])
     cost[:, 0, 1] = ha
     cost[:, 1, 0] = ha
     # play restarts with a kick: leaving D is cheap only near a detected touch
@@ -189,7 +192,7 @@ def refine_boundaries(lab: np.ndarray, bt: BallTrack, a: int, b: int, params: di
 
 
 def decode(bt: BallTrack, dead_logodds: np.ndarray, halves, params: dict, hints=None,
-           model_team_llr=None, pitch=(105.3, 68.0)) -> np.ndarray:
+           model_team_llr=None, pitch=(105.3, 68.0), switch_logodds=None) -> np.ndarray:
     """Labels (N,) "H"/"A"/"D" inside each half, "X" outside. model_team_llr (model B's H-vs-A
     log-odds) is added to the touch evidence when given."""
     p = params["decode"]
@@ -207,7 +210,7 @@ def decode(bt: BallTrack, dead_logodds: np.ndarray, halves, params: dict, hints=
             inside = starts[(starts > a) & (starts <= b)]
             if len(inside):
                 e[a : int(inside.min()), :2] = -1e9
-    cost = switch_costs(bt, len(e), params)
+    cost = switch_costs(bt, len(e), params, switch_logodds)
     min_len = (p["min_possession_frames"], p["min_possession_frames"], p["min_dead_frames"])
     out = np.full(len(e), "X", dtype="<U1")
     for _, a, b in halves:

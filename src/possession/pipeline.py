@@ -27,7 +27,7 @@ def label_with_models(tr, halves, params, tags=None, pitch=None) -> np.ndarray:
     pitch = pitch or (config.PITCH_LENGTH_M, config.PITCH_WIDTH_M)
     from possession.progress import Progress
 
-    ids = model.external_matches()
+    ids = model.external_matches(params)
     bar = Progress("load outside matches", len(ids))
     preps = []
     for m_id in ids:
@@ -49,10 +49,15 @@ def label_with_models(tr, halves, params, tags=None, pitch=None) -> np.ndarray:
         models = model.fit_ensemble(preps, params, own=(prep["dead"][idx], y), own_team=own_team,
                                     label="train pass 2 (+ our set-piece tags)")
         dead, team = model.predict_ensemble(models, prep, params)
+    switch = None
+    if params["decode"].get("w_switch", 0):
+        print("[change detector] training on outside matches", flush=True)
+        switch = model.predict_switch(model.fit_switch(preps, params), prep)
     m = params["model"]
     dead = m["w_dead"] * dead + m["dead_bias"]
     hints = deadball.set_piece_hints(tags) if tags is not None else None
-    return decode.decode(prep["bt"], dead, halves, params, hints, model_team_llr=team, pitch=pitch)
+    return decode.decode(prep["bt"], dead, halves, params, hints, model_team_llr=team, pitch=pitch,
+                         switch_logodds=switch)
 
 
 def run(out: Path, rules_only: bool = False) -> None:
