@@ -66,6 +66,8 @@ decode:
   switch_center: 0               # w 1 / center 0: only setting better on every bench match on all 3 label versions
   switch_max_cost: 8.0
   switch_half_window: 12         # detector target: a team switch within +-0.5 s
+  chair: false                   # learned chair (stacked second-level model) replaces the hand-weighted emissions
+  chair_temperature: 0.1
   dead_before_kickoff: true      # only D between a half's start and its Kick Off (Start) tag
   refine: false                  # stage 6 snapping: off (bench -0.000..+0.001 at 1 s, worse at 2-3 s; GT switches precede our touches by 0.5-2 s)
   snap_s: 3.0

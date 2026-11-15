@@ -192,7 +192,7 @@ def refine_boundaries(lab: np.ndarray, bt: BallTrack, a: int, b: int, params: di
 
 
 def decode(bt: BallTrack, dead_logodds: np.ndarray, halves, params: dict, hints=None,
-           model_team_llr=None, pitch=(105.3, 68.0), switch_logodds=None) -> np.ndarray:
+           model_team_llr=None, pitch=(105.3, 68.0), switch_logodds=None, chair_logp=None) -> np.ndarray:
     """Labels (N,) "H"/"A"/"D" inside each half, "X" outside. model_team_llr (model B's H-vs-A
     log-odds) is added to the touch evidence when given."""
     p = params["decode"]
@@ -202,6 +202,9 @@ def decode(bt: BallTrack, dead_logodds: np.ndarray, halves, params: dict, hints=
     if hints is not None and len(hints):
         dead_logodds, team_llr = add_set_piece_hints(dead_logodds, team_llr, hints, params)
     e = emissions(dead_logodds, team_llr, params)
+    if chair_logp is not None:
+        # the council's chair has already weighed every expert: use its verdict as the evidence
+        e = chair_logp * p["chair_temperature"]
     if hints is not None and len(hints) and p["dead_before_kickoff"]:
         # the ball is dead from the start of a half until its kick-off (Smart Tagging "Kick Off
         # (Start)"), so only D is allowed there. A fixed rule on an inference input, no frame numbers.
