@@ -89,8 +89,8 @@ selection:
   tag_lead_s: 3.0               # stand-in tags start this long before the Metrica restart event (bench-only; results flat for 1.5-5 s)
 
 idsse_bench:
-  test_degrade: ""               # bench only: degrade_variants entry for the held-out Metrica match ("" = idsse_degrade)
-  train_degrade: ""              # bench only: degrade_variants entry for the training matches
+  test_degrade: faithful         # bench: damage on the held-out Metrica match (degrade_variants entry; "" = idsse_degrade)
+  train_degrade: faithful        # damage on the outside training matches, pipeline AND bench (v17; v16 = "")
   merge_blip_s: 1.5              # merge A-H-A blips shorter than this: DFL 3.71 possessions/min vs Metrica event labels 3.64 (2 s: 3.38); whole-match bench +0.008
 
 model:

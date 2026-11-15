@@ -31,7 +31,7 @@ def label_with_models(tr, halves, params, tags=None, pitch=None) -> np.ndarray:
     bar = Progress("load outside matches", len(ids))
     preps = []
     for m_id in ids:
-        preps.append(model.prepare_idsse(m_id, params))
+        preps.append(model.prepare_idsse(m_id, params, variant=params["idsse_bench"].get("train_degrade", "")))
         bar.step(m_id)
     models = model.fit_ensemble(preps, params, label="train pass 1 (outside matches)")
     print("[features] building our match's features", flush=True)
