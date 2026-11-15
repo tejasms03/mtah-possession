@@ -62,24 +62,34 @@ def team_only(prep: dict) -> bool:
     return str(prep.get("id", "")).startswith("SC")
 
 
-def load_external(match_id: str, hide_ball_extra: float = 0.0):
+def degrade_params(params: dict, variant: str = "") -> dict:
+    """params with idsse_degrade overridden by degrade_variants[variant] ("" = as is)."""
+    if not variant:
+        return params
+    q = copy.deepcopy(params)
+    q["idsse_degrade"].update(params["degrade_variants"][variant])
+    return q
+
+
+def load_external(match_id: str, params: dict | None = None):
     from possession.external import idsse, metrica, skillcorner
 
-    if hide_ball_extra > 0:
-        return metrica.load_degraded(match_id, hide_ball_extra)
-    src = metrica if match_id.startswith("MET") else skillcorner if match_id.startswith("SC") else idsse
-    return src.load_degraded(match_id)
+    if match_id.startswith("SC"):
+        return skillcorner.load_degraded(match_id)
+    return (metrica if match_id.startswith("MET") else idsse).load_degraded(match_id, params)
 
 
-def prepare_idsse(match_id: str, params: dict, refresh: bool = False, hide_ball_extra: float = 0.0) -> dict:
+def prepare_idsse(match_id: str, params: dict, refresh: bool = False, variant: str = "") -> dict:
     """prepare() for one degraded outside match (IDSSE or Metrica), cached on disk (local only,
-    gitignored)."""
+    gitignored). variant: a degrade_variants entry (own cache file)."""
     from possession.external.bench import bench_gt
 
-    def load_degraded(mid):
-        return load_external(mid, hide_ball_extra)
+    dp = degrade_params(params, variant) if variant else None
 
-    tag = f"_hb{hide_ball_extra:g}" if hide_ball_extra > 0 else ""
+    def load_degraded(mid):
+        return load_external(mid, dp)
+
+    tag = f"_{variant}" if variant else ""
     path = CACHE / (f"{match_id}{tag}_xt.pkl" if params["features"].get("extra_team") else f"{match_id}{tag}.pkl")
     if path.exists() and not refresh:
         with open(path, "rb") as fh:

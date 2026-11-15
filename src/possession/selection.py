@@ -80,15 +80,14 @@ def main(versions=None, extra_team: bool = False) -> None:
     lead = base["selection"]["tag_lead_s"]
     versions = versions or list(VERSIONS)
     ids = model.external_matches(base)
-    preps = {m: model.prepare_idsse(m, base) for m in ids}
+    need = not (base["idsse_bench"].get("test_degrade") and base["idsse_bench"].get("train_degrade"))
+    preps = {m: model.prepare_idsse(m, base) for m in ids} if need else {}
     mets = list(metrica.MATCHES)
-    hide = base["idsse_bench"].get("hide_ball_extra", 0.0)
-    hidden = {m: model.prepare_idsse(m, base, hide_ball_extra=hide) for m in mets} if hide > 0 else {}
-    test = {m: hidden.get(m, preps[m]) for m in mets}
-    train = dict(preps, **hidden) if base["idsse_bench"].get("hide_ball_train") else preps
-    if hide > 0:
-        print(f"[select] Metrica ball hidden extra {hide:g} on the held-out match"
-              + (" and Metrica training matches" if train is not preps else ""), flush=True)
+    tv, rv = base["idsse_bench"].get("test_degrade", ""), base["idsse_bench"].get("train_degrade", "")
+    train = {m: model.prepare_idsse(m, base, variant=rv) for m in ids} if rv else preps
+    test = {m: (model.prepare_idsse(m, base, variant=tv) if tv else preps[m]) for m in mets}
+    if tv or rv:
+        print(f"[select] test damage '{tv or 'current'}', training damage '{rv or 'current'}'", flush=True)
     bar = Progress("select", len(versions) * len(mets))
     scores = {v: [] for v in versions}
     for v in versions:

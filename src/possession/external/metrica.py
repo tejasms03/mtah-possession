@@ -143,17 +143,19 @@ def load_match(match_id: str, refresh: bool = False) -> IdsseMatch:
     return m
 
 
-def load_degraded(match_id: str, hide_ball_extra: float = 0.0) -> IdsseMatch:
+def load_degraded(match_id: str, params: dict | None = None) -> IdsseMatch:
     """Players damaged like IDSSE (same idsse_degrade settings); the ball left as Metrica has it,
-    unless hide_ball_extra > 0: then extra ball gaps (degrade_ball, own random stream) on top."""
-    params = load_params()
+    unless idsse_degrade.metrica_ball_missing_share is set (faithful variant): then degrade_ball on
+    top (own random stream), with the share counting Metrica's own gaps."""
+    params = params or load_params()
     p, seed = params["idsse_degrade"], params["model"]["seed"]
     m = load_match(match_id)
     rng = np.random.default_rng([seed, zlib.crc32(match_id.encode())])
     px, py, team = degrade_players(rng, m, p)
     ball = m.tracking.ball
-    if hide_ball_extra > 0:
-        q = dict(p, ball_missing_share=hide_ball_extra)
+    if p.get("metrica_ball_missing_share"):
+        q = dict(p, ball_missing_share=p["metrica_ball_missing_share"], ball_missing_union=True,
+                 ball_noise_m=p.get("metrica_ball_noise_m", 0.0), ball_hide_dead_prob=0)
         ball = degrade_ball(np.random.default_rng([seed, zlib.crc32(match_id.encode()), 1]), m, q)
     tr = Tracking(ball=ball, px=px, py=py, ps=speeds(px, py, p["speed_smooth_frames"]), team=team)
     return IdsseMatch(match_id, tr, m.ball_z, m.gt, m.halves, m.pitch)

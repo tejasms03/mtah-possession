@@ -208,26 +208,77 @@ def _ball_gaps(rng, hazard, h0, p):
     return miss
 
 
+def _still_runs(ball: np.ndarray, min_s: float, keep_s: float) -> np.ndarray:
+    """Frames inside runs where the ball moves < 0.5 m/s (5-frame displacement) for >= min_s,
+    minus the last keep_s of each run (the camera picks the ball up as it is played)."""
+    n = len(ball)
+    v = np.full(n, np.inf)
+    v[2:-3] = np.hypot(ball[5:, 0] - ball[:-5, 0], ball[5:, 1] - ball[:-5, 1]) * FPS / 5
+    still = np.nan_to_num(v, nan=np.inf) < 0.5
+    out = np.zeros(n, bool)
+    for a, b in _runs(still):
+        if b - a >= min_s * FPS:
+            out[a : max(a, b - int(keep_s * FPS))] = True
+    return out
+
+
 def degrade_ball(rng, m: "IdsseMatch", p: dict) -> np.ndarray:
     """Drop the ball in long runs, more often near crowds and in the air.
 
     The base hazard is bisected so the missing share on graded frames lands on target. Every
     trial replays the same random stream, so the result is deterministic.
+
+    Optional (all off by default; see params `faithful_degrade`):
+      ball_hide_still_s   hide a ball frozen for at least this long (DFL keeps the ball still at
+                          stoppages; our camera loses it), except the last ball_show_before_play_s
+      ball_hide_dead_prob hide each dead-ball spell (outside labels) with this probability, except
+                          its last ball_show_before_play_s
+      ball_hide_off_m     hide a ball more than this far outside the lines
+      ball_flicker_per_min, ball_flicker_median_s   short dropouts (ours: 11% of gaps < 1 s)
+      ball_missing_union  the target counts every missing frame (already-missing, frozen, off,
+                          flicker), not only the long gaps added here
+      ball_noise_m        Gaussian noise on the seen ball
     """
     t = m.tracking
+    g = graded(m)
+    n = len(t.ball)
+    base = np.isnan(t.ball[:, 0])
+    if p.get("ball_hide_still_s", 0):
+        base |= _still_runs(t.ball, p["ball_hide_still_s"], p.get("ball_show_before_play_s", 1.0))
+    seed = int(rng.integers(2**32))  # first draw, as before the options existed
+    extra = any(p.get(k, 0) for k in ("ball_flicker_per_min", "ball_noise_m", "ball_hide_dead_prob"))
+    frng = np.random.default_rng(int(rng.integers(2**32))) if extra else None
+    if p.get("ball_hide_dead_prob", 0):
+        keep = int(p.get("ball_show_before_play_s", 1.0) * FPS)
+        for a, b in _runs(m.gt == "D"):
+            if frng.random() < p["ball_hide_dead_prob"]:
+                base[a : max(a, b - keep)] = True
+    if p.get("ball_hide_off_m", 0):
+        L, W = m.pitch
+        x, y = t.ball[:, 0], t.ball[:, 1]
+        with np.errstate(invalid="ignore"):
+            base |= np.maximum.reduce([-x, x - L, -y, y - W]) > p["ball_hide_off_m"]
+    if p.get("ball_flicker_per_min", 0):
+        k = frng.poisson(p["ball_flicker_per_min"] * n / FPS / 60)
+        for s0 in frng.integers(0, n, k):
+            base[s0 : s0 + max(1, int(round(frng.lognormal(np.log(p["ball_flicker_median_s"] * FPS), 0.6))))] = True
     d = np.hypot(t.px - t.ball[:, :1], t.py - t.ball[:, 1:])
     crowd = np.maximum((d < p["crowd_radius_m"]).sum(1) - 1, 0)
     air = np.nan_to_num(m.ball_z) > p["air_height_m"]
     hazard = (1 + p["crowd_gain"] * crowd) * np.where(air, p["air_gain"], 1.0)
-    g = graded(m)
-    seed = int(rng.integers(2**32))
+    union = p.get("ball_missing_union", False)
     lo, hi = 1e-5, 1e-1
-    for _ in range(30):
+    for _ in range(30 if p["ball_missing_share"] > 0 else 0):
         h0 = np.sqrt(lo * hi)
         miss = _ball_gaps(np.random.default_rng(seed), hazard, h0, p)
-        lo, hi = (h0, hi) if miss[g].mean() < p["ball_missing_share"] else (lo, h0)
+        share = (miss | base)[g].mean() if union else miss[g].mean()
+        lo, hi = (h0, hi) if share < p["ball_missing_share"] else (lo, h0)
+    if p["ball_missing_share"] <= 0:
+        miss = np.zeros(n, bool)
     ball = t.ball.copy()
-    ball[miss | np.isnan(ball[:, 0])] = np.nan
+    if p.get("ball_noise_m", 0):
+        ball = ball + frng.normal(0, p["ball_noise_m"], ball.shape)
+    ball[miss | base] = np.nan
     return ball
 
 

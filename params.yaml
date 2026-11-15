@@ -89,8 +89,8 @@ selection:
   tag_lead_s: 3.0               # stand-in tags start this long before the Metrica restart event (bench-only; results flat for 1.5-5 s)
 
 idsse_bench:
-  hide_ball_extra: 0.0           # bench stress test: extra live-play ball gaps on Metrica (0.20 ~ our gap pattern: 50% vs 54% of gaps start >5 m inside the pitch)
-  hide_ball_train: false         # also hide on the Metrica training matches (else the held-out match only)
+  test_degrade: ""               # bench only: degrade_variants entry for the held-out Metrica match ("" = idsse_degrade)
+  train_degrade: ""              # bench only: degrade_variants entry for the training matches
   merge_blip_s: 1.5              # merge A-H-A blips shorter than this: DFL 3.71 possessions/min vs Metrica event labels 3.64 (2 s: 3.38); whole-match bench +0.008
 
 model:
@@ -148,3 +148,29 @@ idsse_degrade:                   # calibrated to BAR-ATH tactical ATD aggregates
   pos_noise_m: 0.15
   speed_smooth_frames: 5
   speed_method: displacement     # changes the cache key: speeds() fixed 2026-11-12
+
+degrade_variants:                # bench only (idsse_bench.test_degrade / train_degrade); overrides idsse_degrade
+  faithful: &faithful            # matched to our match's tracking, label-free (outputs/logs/fidelity*.log, sweep_dead*.log)
+    pos_noise_m: 0.0             # ours: player jitter 0.001 m/frame
+    ball_hide_dead_prob: 0.5     # DFL freezes the ball at stoppages, ours loses it: half hidden -> 52% of gaps start >5 m inside (ours 53%), 10.8 m moved over a gap (ours 11.5)
+    ball_show_before_play_s: 1.0
+    ball_hide_off_m: 1.0         # frozen out-of-play DFL ball
+    ball_flicker_per_min: 0.25   # ours: 11% of ball gaps < 1 s
+    ball_flicker_median_s: 0.4
+    ball_missing_union: true
+    ball_missing_share: 0.407    # ours (graded frames)
+    metrica_ball_missing_share: 0.47   # Metrica already misses its ball at stoppages; extra live gaps -> 39-47% start inside
+    ball_noise_m: 0.0            # DFL moving-ball jitter already above ours
+    metrica_ball_noise_m: 0.003  # Metrica ball jitter 0.001 -> ours 0.009
+  clean:                         # training dial 0: no damage (identities kept, every ball sample kept)
+    pos_noise_m: 0.0
+    frag_median_s: 1.0e+9
+    dup_per_player_min: 0.0
+    ball_missing_share: 0.0
+    ball_missing_union: true
+  harsh:                         # training dial 1.5: worse than our match
+    <<: *faithful
+    pos_noise_m: 0.05
+    frag_median_s: 30.0
+    ball_missing_share: 0.5
+    metrica_ball_missing_share: 0.55
