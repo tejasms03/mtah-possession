@@ -89,6 +89,8 @@ selection:
   tag_lead_s: 3.0               # stand-in tags start this long before the Metrica restart event (bench-only; results flat for 1.5-5 s)
 
 idsse_bench:
+  hide_ball_extra: 0.0           # bench stress test: extra live-play ball gaps on Metrica (0.20 ~ our gap pattern: 50% vs 54% of gaps start >5 m inside the pitch)
+  hide_ball_train: false         # also hide on the Metrica training matches (else the held-out match only)
   merge_blip_s: 1.5              # merge A-H-A blips shorter than this: DFL 3.71 possessions/min vs Metrica event labels 3.64 (2 s: 3.38); whole-match bench +0.008
 
 model:

@@ -62,20 +62,25 @@ def team_only(prep: dict) -> bool:
     return str(prep.get("id", "")).startswith("SC")
 
 
-def load_external(match_id: str):
+def load_external(match_id: str, hide_ball_extra: float = 0.0):
     from possession.external import idsse, metrica, skillcorner
 
+    if hide_ball_extra > 0:
+        return metrica.load_degraded(match_id, hide_ball_extra)
     src = metrica if match_id.startswith("MET") else skillcorner if match_id.startswith("SC") else idsse
     return src.load_degraded(match_id)
 
 
-def prepare_idsse(match_id: str, params: dict, refresh: bool = False) -> dict:
+def prepare_idsse(match_id: str, params: dict, refresh: bool = False, hide_ball_extra: float = 0.0) -> dict:
     """prepare() for one degraded outside match (IDSSE or Metrica), cached on disk (local only,
     gitignored)."""
     from possession.external.bench import bench_gt
 
-    load_degraded = load_external
-    path = CACHE / (f"{match_id}_xt.pkl" if params["features"].get("extra_team") else f"{match_id}.pkl")
+    def load_degraded(mid):
+        return load_external(mid, hide_ball_extra)
+
+    tag = f"_hb{hide_ball_extra:g}" if hide_ball_extra > 0 else ""
+    path = CACHE / (f"{match_id}{tag}_xt.pkl" if params["features"].get("extra_team") else f"{match_id}{tag}.pkl")
     if path.exists() and not refresh:
         with open(path, "rb") as fh:
             prep = pickle.load(fh)

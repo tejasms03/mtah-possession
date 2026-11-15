@@ -25,7 +25,7 @@ import numpy as np
 import pandas as pd
 
 from possession.config import REPO_ROOT, load_params
-from possession.external.idsse import IdsseMatch, _read, _save, degrade_players, speeds
+from possession.external.idsse import IdsseMatch, _read, _save, degrade_ball, degrade_players, speeds
 from possession.load import Tracking
 
 MATCHES = {"MET1": 1, "MET2": 2, "MET3": 3}
@@ -143,12 +143,17 @@ def load_match(match_id: str, refresh: bool = False) -> IdsseMatch:
     return m
 
 
-def load_degraded(match_id: str) -> IdsseMatch:
-    """Players damaged like IDSSE (same idsse_degrade settings); the ball left as Metrica has it."""
+def load_degraded(match_id: str, hide_ball_extra: float = 0.0) -> IdsseMatch:
+    """Players damaged like IDSSE (same idsse_degrade settings); the ball left as Metrica has it,
+    unless hide_ball_extra > 0: then extra ball gaps (degrade_ball, own random stream) on top."""
     params = load_params()
     p, seed = params["idsse_degrade"], params["model"]["seed"]
     m = load_match(match_id)
     rng = np.random.default_rng([seed, zlib.crc32(match_id.encode())])
     px, py, team = degrade_players(rng, m, p)
-    tr = Tracking(ball=m.tracking.ball, px=px, py=py, ps=speeds(px, py, p["speed_smooth_frames"]), team=team)
+    ball = m.tracking.ball
+    if hide_ball_extra > 0:
+        q = dict(p, ball_missing_share=hide_ball_extra)
+        ball = degrade_ball(np.random.default_rng([seed, zlib.crc32(match_id.encode()), 1]), m, q)
+    tr = Tracking(ball=ball, px=px, py=py, ps=speeds(px, py, p["speed_smooth_frames"]), team=team)
     return IdsseMatch(match_id, tr, m.ball_z, m.gt, m.halves, m.pitch)

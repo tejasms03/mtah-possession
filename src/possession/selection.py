@@ -82,14 +82,21 @@ def main(versions=None, extra_team: bool = False) -> None:
     ids = model.external_matches(base)
     preps = {m: model.prepare_idsse(m, base) for m in ids}
     mets = list(metrica.MATCHES)
+    hide = base["idsse_bench"].get("hide_ball_extra", 0.0)
+    hidden = {m: model.prepare_idsse(m, base, hide_ball_extra=hide) for m in mets} if hide > 0 else {}
+    test = {m: hidden.get(m, preps[m]) for m in mets}
+    train = dict(preps, **hidden) if base["idsse_bench"].get("hide_ball_train") else preps
+    if hide > 0:
+        print(f"[select] Metrica ball hidden extra {hide:g} on the held-out match"
+              + (" and Metrica training matches" if train is not preps else ""), flush=True)
     bar = Progress("select", len(versions) * len(mets))
     scores = {v: [] for v in versions}
     for v in versions:
         params = version_params(base, VERSIONS[v])
         for mid in mets:
-            prep = preps[mid]
+            prep = test[mid]
             tags = stand_in_tags(mid, len(prep["gt"]), lead)
-            lab = run_version(prep, [preps[o] for o in ids if o != mid], tags, params)
+            lab = run_version(prep, [train[o] for o in ids if o != mid], tags, params)
             r = pm.evaluate(pm.label_codes(prep["gt"]), pm.label_codes(lab))
             scores[v].append((r["spell_f1_mean"], r["macro_f1"]))
             bar.step(f"{v} {mid}: spellF1 {r['spell_f1_mean']:.3f} macroF1 {r['macro_f1']:.3f}")
