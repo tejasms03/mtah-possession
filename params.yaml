@@ -45,7 +45,7 @@ dead_ball:
 
 decode:
   temperature: 0.1               # scales all per-frame evidence (neighbouring frames are correlated)
-  lambda_ha: 2                 # cost of an H<->A switch away from any touch
+  lambda_ha: 0.5               # cost of an H<->A switch away from any touch (v19, was 2: with merge_sandwich_s 1.5)
   lambda_ha_touch: 2           # ... within touch_window_frames of a detected touch
   touch_window_frames: 12
   lambda_d_exit: 4             # cost of leaving D away from a touch (restarts are kicks)
@@ -63,7 +63,7 @@ decode:
   w_tag_team: 0                  # ... and the named team restarts. v15: off (same bench test)
   tag_team_frames: 375           # 15 s after the tag start
   w_switch: 1                    # change detector (council expert #4): H<->A cost -= w * (log-odds - center); 0 = off. v16
-  switch_center: 0               # w 1 / center 0: only setting better on every bench match on all 3 label versions
+  switch_center: -0.5            # v19 (was 0): trust the change detector more, with merge_sandwich_s 1.5
   switch_max_cost: 8.0
   switch_half_window: 12         # detector target: a team switch within +-0.5 s
   chair: false                   # learned chair (stacked second-level model) replaces the hand-weighted emissions
@@ -75,6 +75,13 @@ decode:
   switch_offset_frames: 0        # stage 6: measured lag correction
   gap_pool: 0.0                  # bench test: blend dead log-odds with the missing-ball run's mean (0 = off)
   dead_bias_miss: -0.75          # v18: extra dead log-odds where the raw ball is missing (with motion_extra; -0.4..-1 all pass, every match better)
+  gap_anchor: 0.0                # bench test: team evidence added across a ball gap whose two ends favour the same team (0 = off)
+  gap_anchor_edge_s: 0.4
+  gap_anchor_min_s: 1.0
+  gap_anchor_min_llr: 0.5
+  merge_sandwich_s: 1.5          # v19: merge our A-H-A blips shorter than this, the training labels' own rule (idsse_bench.merge_blip_s)
+  last_touch_s: 2.0              # v19: last touch before a stoppage owns the ball up to it
+  last_touch_extend_s: 0.0       # bench test: a touch this soon after our stoppage start moves the start to the touch
 
 features:
   gap_extra: false               # whole-gap ball context (where the ball vanished / came back); bench test

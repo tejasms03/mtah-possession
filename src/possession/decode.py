@@ -216,6 +216,8 @@ def decode(bt: BallTrack, dead_logodds: np.ndarray, halves, params: dict, hints=
     team_llr = team_evidence(bt, params)
     if model_team_llr is not None:
         team_llr = team_llr + params["model"]["w_team"] * np.nan_to_num(model_team_llr)
+    if p.get("gap_anchor", 0):
+        team_llr = gap_anchor(team_llr, bt, p)
     if hints is not None and len(hints):
         dead_logodds, team_llr = add_set_piece_hints(dead_logodds, team_llr, hints, params)
     e = emissions(dead_logodds, team_llr, params)
@@ -237,4 +239,70 @@ def decode(bt: BallTrack, dead_logodds: np.ndarray, halves, params: dict, hints=
         out[a : b + 1] = LABELS[viterbi(e[a : b + 1], min_len, cost[a : b + 1])]
         if p["refine"]:
             out = refine_boundaries(out, bt, a, b, params, pitch)
+        if p.get("merge_sandwich_s", 0):
+            out[a : b + 1] = merge_sandwiches(out[a : b + 1], int(round(p["merge_sandwich_s"] * 25)))
+        if p.get("last_touch_s", 0):
+            out[a : b + 1] = last_touch_before_dead(out[a : b + 1], bt.touch_team[a : b + 1], p)
+    return out
+
+
+def gap_anchor(team_llr: np.ndarray, bt: BallTrack, p: dict) -> np.ndarray:
+    """Off unless decode.gap_anchor > 0. For each run of frames where the raw ball is missing
+    (at least gap_anchor_min_s long), read the team evidence over gap_anchor_edge_s just before the
+    ball vanished and just after it came back. If both ends favour the same team (each beyond
+    gap_anchor_min_llr), add gap_anchor to that team's evidence across the gap: the same team most
+    likely kept the ball. If the ends disagree, nothing changes and the decoder places the switch."""
+    out = np.asarray(team_llr, float).copy()
+    miss = ~np.asarray(bt.observed, bool)
+    k = max(1, int(round(p.get("gap_anchor_edge_s", 0.4) * 25)))
+    lo_len = int(round(p.get("gap_anchor_min_s", 1.0) * 25))
+    thr = p.get("gap_anchor_min_llr", 0.5)
+    e = np.flatnonzero(np.diff(np.r_[0, miss.astype(np.int8), 0]))
+    n = len(out)
+    for s, t in zip(e[::2], e[1::2]):
+        if t - s < lo_len or s < k or t + k > n:
+            continue
+        a, b = np.nanmean(out[s - k : s]), np.nanmean(out[t : t + k])
+        if a > thr and b > thr:
+            out[s:t] += p["gap_anchor"]
+        elif a < -thr and b < -thr:
+            out[s:t] -= p["gap_anchor"]
+    return out
+
+
+def merge_sandwiches(lab: np.ndarray, max_len: int) -> np.ndarray:
+    """Off unless decode.merge_sandwich_s > 0. An H run shorter than max_len frames with A on both
+    sides (or the reverse) becomes the surrounding team: the same rule the outside training labels
+    use (idsse_bench.merge_blip_s), so we never output a possession the labels cannot contain."""
+    out = lab.copy()
+    e = np.flatnonzero(np.r_[True, out[1:] != out[:-1], True])
+    for i in range(1, len(e) - 2):
+        s, t = e[i], e[i + 1]
+        if t - s < max_len and out[s] in ("H", "A") and out[s - 1] == out[t] and out[t] in ("H", "A") and out[t] != out[s]:
+            out[s:t] = out[t]
+    return out
+
+
+def last_touch_before_dead(lab: np.ndarray, touch_team: np.ndarray, p: dict) -> np.ndarray:
+    """Off unless decode.last_touch_s > 0. At each start of a dead spell, look back up to
+    last_touch_s seconds for the last detected touch. If the other team made it (a clearance or
+    block that goes out), that team owns the ball from its touch to the stoppage, as event-based
+    possession labels do. last_touch_extend_s: also let a touch just after our stoppage start
+    (within that many seconds) pull the stoppage start back to the touch."""
+    out = lab.copy()
+    look = int(round(p["last_touch_s"] * 25))
+    ext = int(round(p.get("last_touch_extend_s", 0) * 25))
+    starts = np.flatnonzero((out[1:] == "D") & (out[:-1] != "D")) + 1
+    for d0 in starts:
+        lo, hi = max(0, d0 - look), min(len(out), d0 + ext)
+        idx = np.flatnonzero(np.isin(touch_team[lo:hi], ["H", "A"]))
+        if not len(idx):
+            continue
+        f = lo + idx[-1]
+        team = touch_team[f]
+        if f < d0:
+            if out[d0 - 1] != team and np.all(out[f:d0] != "D"):
+                out[f:d0] = team
+        elif ext:
+            out[d0 : f + 1] = team          # touch after our stoppage start: stoppage begins later
     return out

@@ -14,7 +14,8 @@ v = base["idsse_bench"]["train_degrade"]
 # ball track, labels and halves do not depend on the extra feature flags: v17 caches serve every variant
 preps = {m: model.prepare_idsse(m, base, variant=v) for m in ids}
 load = lambda d: {m: pickle.load(open(f"outputs/logs/experts{d}/{m}.pkl", "rb")) for m in ids}  # noqa: E731
-ex17 = load("")
+BASE = os.environ.get("BASE", "")            # experts used for the reference row ("mot" = v18)
+ex17 = load(f"_{BASE}" if BASE else "")
 ex = load(f"_{EXP}") if EXP else ex17
 P0 = selection.version_params(base, selection.VERSIONS["v6"])
 empty = pd.DataFrame(columns=["start_frame", "end_frame", "type", "team"])
@@ -41,7 +42,7 @@ axes = [(a.split("=")[0], [float(x) for x in a.split("=")[1].split(",")]) for a 
 ref = run(P0, ex17)
 print("experts:", EXP or "v17")
 print("match".ljust(30) + " " + " ".join(f"{m[-4:]:>6}" for m in ids) + "    mean   dMET  dDFL  worst")
-row("v17", ref)
+row(BASE or "v17", ref)
 if EXP:
     row(EXP, run(P0, ex))
 for combo in itertools.product(*[vals for _, vals in axes]):

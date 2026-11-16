@@ -21,7 +21,7 @@ def ffill(a):
 
 
 def frame_table(mid):
-    z = np.load(f"outputs/logs/holdout_preds/{mid}.npz", allow_pickle=True)
+    z = np.load(f"outputs/logs/{__import__('os').environ.get('PREDS', 'holdout_preds')}/{mid}.npz", allow_pickle=True)
     gt, lab = z["gt"], z["lab"]
     m = model.load_external(mid, dp)
     t = m.tracking
