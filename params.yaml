@@ -73,8 +73,13 @@ decode:
   snap_s: 3.0
   snap_stop_after_s: 1.0
   switch_offset_frames: 0        # stage 6: measured lag correction
+  gap_pool: 0.0                  # bench test: blend dead log-odds with the missing-ball run's mean (0 = off)
+  dead_bias_miss: -0.75          # v18: extra dead log-odds where the raw ball is missing (with motion_extra; -0.4..-1 all pass, every match better)
 
 features:
+  gap_extra: false               # whole-gap ball context (where the ball vanished / came back); bench test
+  motion_extra: true             # v18: top speeds, speed spread, accelerations, block movement, duels (with decode.dead_bias_miss: 10-match hold-out +0.016, every match better)
+  ghost_extra: false             # idea D: ball point guessed from players (src/possession/ghost.py); bench test
   extra_team: true               # idea 2: heading, pressure, touch runs, last toucher (+0.012/+0.013 on whole-match select)
   team_windows_s: [0.4, 1, 2, 4]          # centred means for the whose-ball notes
   game_windows_s: [0.4, 1, 2, 4, 10, 40]   # dead-ball notes also need stoppage-length context
@@ -96,6 +101,7 @@ idsse_bench:
 model:
   seed: 0
   row_step: 5                    # train on every 5th graded frame
+  miss_weight: 1.0               # idea C: training weight on missing-ball frames for model A; bench test
   learning_rate: 0.05
   max_iter: 300                  # trees
   max_leaf_nodes: 31

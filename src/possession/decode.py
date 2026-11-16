@@ -191,11 +191,28 @@ def refine_boundaries(lab: np.ndarray, bt: BallTrack, a: int, b: int, params: di
     return out
 
 
+def missing_ball_adjust(dead_logodds: np.ndarray, bt: BallTrack, p: dict) -> np.ndarray:
+    """Bench tests (both 0 = unchanged). gap_pool: inside each run of frames where the raw ball is
+    missing, blend each frame's dead log-odds with that run's mean (judge the gap as a whole).
+    dead_bias_miss: added to the dead log-odds only where the raw ball is missing."""
+    pool, bias = p.get("gap_pool", 0.0), p.get("dead_bias_miss", 0.0)
+    if not pool and not bias:
+        return dead_logodds
+    miss = ~np.asarray(bt.observed, bool)
+    out = np.asarray(dead_logodds, float).copy()
+    if pool:
+        e = np.flatnonzero(np.diff(np.r_[0, miss.astype(np.int8), 0]))
+        for s, t in zip(e[::2], e[1::2]):
+            out[s:t] = (1 - pool) * out[s:t] + pool * np.nanmean(out[s:t])
+    return out + bias * miss
+
+
 def decode(bt: BallTrack, dead_logodds: np.ndarray, halves, params: dict, hints=None,
            model_team_llr=None, pitch=(105.3, 68.0), switch_logodds=None, chair_logp=None) -> np.ndarray:
     """Labels (N,) "H"/"A"/"D" inside each half, "X" outside. model_team_llr (model B's H-vs-A
     log-odds) is added to the touch evidence when given."""
     p = params["decode"]
+    dead_logodds = missing_ball_adjust(dead_logodds, bt, p)
     team_llr = team_evidence(bt, params)
     if model_team_llr is not None:
         team_llr = team_llr + params["model"]["w_team"] * np.nan_to_num(model_team_llr)

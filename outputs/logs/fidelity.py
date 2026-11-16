@@ -79,25 +79,26 @@ def measures(ball, px, py, L, W, live_mask):
 
 
 def ours():
+    from possession.config import graded_mask
     t = load.load_atd()
-    live = ~(np.isnan(t.ball[:, 0]) & np.all(np.isnan(t.px), 1))  # frames with any data
+    live = graded_mask()  # the frame range inside the halves (no labels)
     return measures(t.ball, t.px, t.py, 105.3, 68.0, live)
 
 
-def outside(mid, hide=0.0):
-    m = model.load_external(mid, hide)
-    live = np.zeros(len(m.gt), bool)
-    for _, a, b in m.halves:
-        live[a : b + 1] = True
+def outside(mid, dp=None):
+    m = model.load_external(mid, dp)
+    live = m.gt != "X"  # inside the halves, as in idsse.graded
     return measures(m.tracking.ball, m.tracking.px, m.tracking.py, *m.pitch, live)
 
 
 if __name__ == "__main__":
-    hide = float(sys.argv[1]) if len(sys.argv) > 1 else 0.0
+    variant = sys.argv[1] if len(sys.argv) > 1 else ""
+    base = load_params()
+    dp = model.degrade_params(base, variant) if variant else None
     rows = {"OURS": ours()}
-    ids = model.external_matches(load_params())
+    ids = model.external_matches(base)
     for mid in ids:
-        rows[mid] = outside(mid, hide if mid.startswith("MET") else 0.0)
+        rows[mid] = outside(mid, dp)
         print(f"  measured {mid}", flush=True)
     keys = list(rows["OURS"])
     names = list(rows)

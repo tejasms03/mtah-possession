@@ -90,6 +90,12 @@ def prepare_idsse(match_id: str, params: dict, refresh: bool = False, variant: s
         return load_external(mid, dp)
 
     tag = f"_{variant}" if variant else ""
+    if params["features"].get("gap_extra"):
+        tag += "_gap"
+    if params["features"].get("motion_extra"):
+        tag += "_mot"
+    if params["features"].get("ghost_extra"):
+        tag += "_gho"
     path = CACHE / (f"{match_id}{tag}_xt.pkl" if params["features"].get("extra_team") else f"{match_id}{tag}.pkl")
     if path.exists() and not refresh:
         with open(path, "rb") as fh:
@@ -98,6 +104,9 @@ def prepare_idsse(match_id: str, params: dict, refresh: bool = False, variant: s
         prep["gt"] = bench_gt(load_degraded(match_id))
         return prep
     m = load_degraded(match_id)
+    if params["features"].get("ghost_extra"):
+        params = copy.deepcopy(params)
+        params["features"]["ghost_for"] = match_id          # the ghost model that never saw this match
     prep = prepare(clean_atd(m.tracking, params), m.halves, m.pitch, params, gt=bench_gt(m))
     prep["id"] = match_id
     CACHE.mkdir(parents=True, exist_ok=True)
@@ -240,6 +249,11 @@ def fit(preps: list[dict], params: dict, own=None, own_team=None):
     Xa, ya, Xb, yb = training_sets(preps, params)
     wa = np.ones(len(ya))
     keep = dead_keep(params)
+    mw = params["model"].get("miss_weight", 1.0)
+    if mw != 1.0:
+        # idea C: count frames with the ball missing more, so model A can't coast on seen-ball frames
+        kept = np.array(dead_columns(params))[keep]
+        wa[Xa[:, list(kept).index("ball_known")] < 0.5] = mw
     if own is not None:
         Xo, yo = own
         Xa = np.concatenate([Xa, Xo[:, keep]])

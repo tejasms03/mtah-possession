@@ -102,7 +102,113 @@ def game_block(tr: Tracking, bt: BallTrack, params: dict, pitch) -> pd.DataFrame
     since, until = since_until(bt.touch)
     f["touch_since"], f["touch_until"] = since, until
     f["n_tracked"] = (~np.isnan(tr.px[:, np.isin(tr.team, ["H", "A"])])).sum(axis=1).astype(float)
+    if params["features"].get("gap_extra"):
+        f = pd.concat([f, gap_block(tr, pitch)], axis=1)
+    if params["features"].get("motion_extra"):
+        f = pd.concat([f, motion_block(tr)], axis=1)
+    if params["features"].get("ghost_extra"):
+        from possession import ghost
+        f = pd.concat([f, ghost.ghost_block(tr, bt, pitch, params["features"].get("ghost_for"))], axis=1)
     return f.drop(columns=["ball_out"])
+
+
+def motion_block(tr: Tracking) -> pd.DataFrame:
+    """Team-blind player motion that an average speed hides (off unless features.motion_extra):
+    the 3 fastest players, the spread of speeds, the share running (> 4 m/s), the 3 hardest
+    speed changes over 0.2 s, how much each team moves as one block (|mean velocity| / mean
+    speed, and the block's own speed), and opponent pairs within 2 m (duels). All from player
+    positions and velocities only, so it works whether or not the ball is seen."""
+    hs = np.isin(tr.team, ["H", "A"])
+    if tr.vx is not None:
+        vx, vy = tr.vx[:, hs], tr.vy[:, hs]
+        s = np.hypot(vx, vy)
+    else:
+        vx = vy = None
+        s = tr.ps[:, hs]
+    n = len(s)
+    with np.errstate(invalid="ignore"):
+        srt = -np.sort(-np.nan_to_num(s, nan=-1.0), axis=1)
+        top = np.where(srt[:, :3] < 0, np.nan, srt[:, :3])
+        k = 5                                                   # 0.2 s at 25 fps
+        dv = np.full_like(s, np.nan)
+        if vx is not None:
+            dv[k:] = np.hypot(vx[k:] - vx[:-k], vy[k:] - vy[:-k]) / (k / FPS)
+        else:
+            dv[k:] = np.abs(s[k:] - s[:-k]) / (k / FPS)
+        dsrt = -np.sort(-np.nan_to_num(dv, nan=-1.0), axis=1)
+        dtop = np.where(dsrt[:, :3] < 0, np.nan, dsrt[:, :3])
+        out = {
+            "mx_top3": np.nanmean(top, axis=1),
+            "mx_sd": np.nanstd(s, axis=1),
+            "mx_run": np.nanmean(np.where(np.isnan(s), np.nan, s > 4.0), axis=1),
+            "mx_acc3": np.nanmean(dtop, axis=1),
+        }
+        align, block = [], []
+        for team in ("H", "A"):
+            c = tr.team[hs] == team
+            if vx is not None:
+                mvx, mvy = np.nanmean(vx[:, c], axis=1), np.nanmean(vy[:, c], axis=1)
+                bs = np.hypot(mvx, mvy)
+            else:
+                cx = np.nanmean(tr.px[:, hs][:, c], axis=1)
+                cy = np.nanmean(tr.py[:, hs][:, c], axis=1)
+                bs = np.full(n, np.nan)
+                bs[k:] = np.hypot(cx[k:] - cx[:-k], cy[k:] - cy[:-k]) / (k / FPS)
+            ms = np.nanmean(s[:, c], axis=1)
+            align.append(bs / np.maximum(ms, 0.3))
+            block.append(bs)
+        out["mx_align"] = np.nanmean(align, axis=0)
+        out["mx_block"] = np.nanmean(block, axis=0)
+        px, py = tr.px[:, hs], tr.py[:, hs]
+        h, a = tr.team[hs] == "H", tr.team[hs] == "A"
+        d = np.hypot(px[:, h][:, :, None] - px[:, a][:, None, :], py[:, h][:, :, None] - py[:, a][:, None, :])
+        out["mx_duels"] = (np.nan_to_num(d, nan=np.inf) <= 2.0).sum(axis=(1, 2)).astype(float)
+    return pd.DataFrame(out)
+
+
+def gap_block(tr: Tracking, pitch) -> pd.DataFrame:
+    """Whole-gap ball context (offline: the gap's end is known). For each frame inside a run of
+    missing ball: where the ball vanished and where it came back (distance to the nearest line,
+    negative outside), how far apart those are, whether it came back near a restart spot, the
+    ball's speed just before it vanished, and how far through the gap this frame is. 0 when seen."""
+    L, W = pitch
+    b = tr.ball
+    n = len(b)
+    miss = np.isnan(b[:, 0])
+    e = np.flatnonzero(np.diff(np.r_[0, miss.astype(np.int8), 0]))
+    cols = ["gx_vanish_edge", "gx_back_edge", "gx_jump_m", "gx_back_restart_m", "gx_vanish_speed",
+            "gx_frac", "gx_back_in_s"]
+    out = {c: np.zeros(n, dtype=float) for c in cols}
+
+    def edge(x, y):
+        return min(x, L - x, y, W - y)
+
+    spots = np.array([[0, 0], [0, W], [L, 0], [L, W], [L / 2, W / 2], [5.5, W / 2], [L - 5.5, W / 2],
+                      [11, W / 2], [L - 11, W / 2]])
+
+    def restart(x, y):
+        return min(float(np.min(np.hypot(spots[:, 0] - x, spots[:, 1] - y))), abs(y), abs(W - y))
+
+    for s, t in zip(e[::2], e[1::2]):
+        before = b[s - 1] if s > 0 else None
+        after = b[t] if t < n else None
+        if before is None and after is None:
+            continue
+        before = after if before is None else before
+        after = before if after is None else after
+        k = max(0, s - 10)
+        seg = b[k:s]
+        seg = seg[~np.isnan(seg[:, 0])]
+        vs = float(np.hypot(*(seg[-1] - seg[0])) * 25 / max(1, len(seg) - 1)) if len(seg) > 1 else 0.0
+        m = t - s
+        out["gx_vanish_edge"][s:t] = edge(*before)
+        out["gx_back_edge"][s:t] = edge(*after)
+        out["gx_jump_m"][s:t] = np.hypot(*(after - before))
+        out["gx_back_restart_m"][s:t] = restart(*after)
+        out["gx_vanish_speed"][s:t] = vs
+        out["gx_frac"][s:t] = (np.arange(m) + 0.5) / m
+        out["gx_back_in_s"][s:t] = np.arange(m)[::-1] / 25
+    return pd.DataFrame(out)
 
 
 def windowed(df: pd.DataFrame, windows_s, edge_cols=(), edge_s=1.0) -> pd.DataFrame:
