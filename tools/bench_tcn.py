@@ -27,7 +27,11 @@ base = config.load_params()
 ids = model.external_matches(base)
 _pb = copy.deepcopy(base)
 _pb["features"].update(turnover_extra=False, restart_extra=False, carrier_extra=False)
-preps = {m: model.prepare_idsse(m, _pb, variant=base["idsse_bench"]["train_degrade"]) for m in ids}
+preps = {}
+for m in ids:          # keep only what decoding needs (ball track, labels, halves): low memory
+    pr = model.prepare_idsse(m, _pb, variant=base["idsse_bench"]["train_degrade"])
+    preps[m] = {k: pr[k] for k in ("bt", "gt", "halves", "pitch")}
+    del pr
 P = selection.version_params(base, selection.VERSIONS["v6"])
 P["decode"]["switch_center"], P["model"]["w_team"] = -1.0, 1.0
 empty = pd.DataFrame(columns=["start_frame", "end_frame", "type", "team"])
@@ -36,7 +40,7 @@ E1 = {m: pickle.load(open(f"{EXP}/experts_to/{m}.pkl", "rb")) for m in ids}
 
 TC = {}
 for m in ids:
-    f = f"{FOLDS}/tcn_out_{m}.npz"
+    f = f"{FOLDS}/tcn_out_{m}.npz"   # cached TCN outputs for this fold set
     if not os.path.exists(f):
         W = tcn.load(f"{FOLDS}/fold_{m}.npz")
         pr, e = preps[m], E1[m]
