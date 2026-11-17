@@ -26,13 +26,13 @@ Then:
 | `make test` | unit tests |
 | `make submission TEAM=<name>` | full pipeline → `outputs/<name>.csv`, then validates it (about 1 h 40 min on one laptop processor thread; it rebuilds all features and models from scratch) |
 | `make eval TEAM=<name>` | scores it on the public 5 minutes with the organisers' scorer |
+| `make verify` | regenerates and checks the file is byte-identical to the recorded hash |
+| `uv run possession idsse` | downloads, converts and degrades the 7 IDSSE matches into `external_data/idsse/` (~2.6 GB, ~10 min) |
+| `uv run possession bench [pipeline ...]` | scores pipelines on the degraded IDSSE matches → `outputs/bench/<pipeline>.csv` |
 
 **Our submission (team La Remontada):** `make submission TEAM=la_remontada` writes `outputs/la_remontada.csv`,
 byte-identical to the submitted `la remontada.csv` (SHA-256 in `SUBMISSION_SHA256`; `make verify` checks it).
 Make cannot take a space in `TEAM`, hence the underscore; only the file name differs.
-| `make verify` | regenerates and checks the file is byte-identical to the recorded hash |
-| `uv run possession idsse` | downloads, converts and degrades the 7 IDSSE matches into `external_data/idsse/` (~2.6 GB, ~10 min) |
-| `uv run possession bench [pipeline ...]` | scores pipelines on the degraded IDSSE matches → `outputs/bench/<pipeline>.csv` |
 
 ## Layout
 
