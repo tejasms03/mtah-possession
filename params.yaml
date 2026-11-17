@@ -68,6 +68,8 @@ decode:
   switch_half_window: 12         # detector target: a team switch within +-0.5 s
   chair: false                   # learned chair (stacked second-level model) replaces the hand-weighted emissions
   chair_temperature: 0.1
+  tcn_weight: 0.5               # TCN H/A/D log-probs blended into the emissions: (1-w) * ours + w * temperature * TCN (model.tcn.use)
+  tcn_hidden_only: false        # blend only where the ball is not seen (bench: much weaker)
   dead_before_kickoff: true      # only D between a half's start and its Kick Off (Start) tag
   refine: false                  # stage 6 snapping: off (bench -0.000..+0.001 at 1 s, worse at 2-3 s; GT switches precede our touches by 0.5-2 s)
   snap_s: 3.0
@@ -154,6 +156,9 @@ model:
   sequence:
     use: true                    # v20/v21 tree sequence model (src/possession/sequence.py): team evidence from a second stage reading the first stage's outputs over -4..+4 s; bench test
     team_only: true              # replace only the team evidence (switch evidence stays first-stage)
+  tcn:
+    use: true                    # v22 candidate: network sequence model (src/possession/tcn.py, weights trained offline by tools/train_tcn.py on outside matches only); bench +0.017 vs v21
+    weights: models/tcn.npz
   ensemble:
     size: 1                      # v14: single model set (5-member average tied on the whole-match bench)
     max_features: 0.8            # members only: share of features tried per split

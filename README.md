@@ -34,6 +34,13 @@ Then:
 byte-identical to the submitted `la remontada.csv` (SHA-256 in `SUBMISSION_SHA256`; `make verify` checks it).
 Make cannot take a space in `TEAM`, hence the underscore; only the file name differs.
 
+**Network sequence model (v22, submitted):** `src/possession/tcn.py`, switched on by `model.tcn.use`. Its weights
+`models/tcn.npz` are committed and the pipeline runs them with numpy, so `make submission` needs no PyTorch.
+To retrain them (optional, needs PyTorch 2.x, not in the uv env): build the per-match inputs from the
+out-of-fold first-stage outputs, then
+`python tools/train_tcn.py <ds_dir> models/tcn.npz <the 10 outside match ids, comma separated> 1500 0`.
+Bench against v21: `tools/bench_tcn.py` (leave-one-match-out folds from the same script).
+
 ## Layout
 
 ```
