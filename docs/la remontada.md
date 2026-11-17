@@ -2,7 +2,7 @@
 
 More Than A Hack 2027 · Technical document · Code: https://github.com/tejasms03/mtah-possession
 
-**Submission:** `la remontada.csv`, SHA-256 `b886ae5807d19e3bea7d79f949655e890538b1d891bc2eb5b55bfe96298c7158 (version v22)`.
+**Submission:** `la remontada.csv`, SHA-256 `b886ae5807d19e3bea7d79f949655e890538b1d891bc2eb5b55bfe96298c7158` (version v22).
 `make submission TEAM=la_remontada` regenerates it byte for byte, which we checked from a fresh clone.
 
 ## 1. Approach in one paragraph
@@ -156,7 +156,7 @@ is hidden, added nothing and is off. On our match, v22 outputs 295 possessions (
 
   After the organisers' clarification (no training on the provided match) and EVALUATION.md (no choosing by
   the public window), both were switched off and all later choices were made on outside matches. The
-  submitted v21 uses neither.
+  submitted v22 uses neither.
 - **The TCN idea.** The design follows a generic published architecture (dilated residual temporal convolutions).
   Another team's public write-up (Opus-Operandi) prompted us to try it; we did not use their code. All TCN code
   is ours.
