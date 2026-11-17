@@ -89,6 +89,9 @@ These follow the training labels' conventions, because spellF1 rewards matching 
 
 ## 5. Results and what we tried
 
+**Every spellF1 number in this document is from our outside-match bench, never from BAR-ATH.** The public
+5 minutes were only scored to check the file and the pipeline work; those numbers are not reported or used.
+
 **Our test bench.** We hold out each of the 10 outside matches in turn, train on the other 9, and score the
 held-out match with the organisers' `possession_metrics.py` (`spell_f1_mean`). The tracking is damaged as in
 section 3.
@@ -101,7 +104,7 @@ current version:
 - a neighbouring setting agrees;
 - the block-bootstrap 90% range is above 0.
 
-| Version | Change | Held-out spellF1 |
+| Version | Change | Bench spellF1 (10 held-out outside matches) |
 |---|---|---|
 | v17 | "faithful" training damage | 0.682 |
 | v18 | player-motion inputs for the dead-ball model, plus a live-play bias while the ball is missing | 0.698 |
@@ -135,7 +138,7 @@ is hidden, added nothing and is off. On our match, v22 outputs 295 possessions (
 
 - **We output too few possessions:** 2.9 per minute against 3.6 in the outside matches' labels. Possessions
   shorter than 4 s are found only 32-55% of the time. If team calls were perfect while the ball is visible, the
-  held-out score would rise from 0.71 to 0.84. Quick turnovers are the main remaining error.
+  bench score would rise from 0.71 to 0.84. Quick turnovers are the main remaining error.
 - **While the ball is missing** (about 41% of our match), team calls are weaker, and some live play is still
   called dead.
 - **Our test matches are proxies.** The damage is matched to our match's statistics, but DFL and Metrica
