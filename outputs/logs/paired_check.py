@@ -39,7 +39,7 @@ if os.environ.get("CANDS"):
     }.items()}
 if os.environ.get("VS21"):   # reference = v21; candidates on carrier + turnover experts
     cands = {f"{d} sc{sc:g} w{w:g}": (d, {"decode.switch_center": sc, "model.w_team": w})
-             for d in ("seqT_toca", "toca") for sc in (-1.0, -0.5) for w in (1.0, 1.5)}
+             for d in os.environ.get("DIRS", "seqT_toca,toca").split(",") for sc in (-1.0, -0.5) for w in (1.0, 1.5)}
     ref = labels(setp(P0, {"decode.switch_center": -1.0, "model.w_team": 1.0}), "seqT_to")
 else:
     P0["decode"]["switch_center"] = -0.5          # reference = v19 exactly
