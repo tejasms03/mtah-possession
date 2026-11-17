@@ -5,14 +5,15 @@ that match; those models did see m, a second-order leak noted in DECISIONS). Wri
   experts_seqT_BASE/  team from the second stage, first-stage switch
   experts_seqM_BASE/  team = mean of first and second stage, second-stage switch
 Usage: python bench_seq.py [BASE=mot]"""
-import pickle, sys
+import copy, pickle, sys
 from pathlib import Path
 import numpy as np
 from possession import config, model, sequence
 
 B = sys.argv[1] if len(sys.argv) > 1 else "mot"
 base = config.load_params(); ids = model.external_matches(base)
-preps = {m: model.prepare_idsse(m, base, variant=base["idsse_bench"]["train_degrade"]) for m in ids}
+_pb = copy.deepcopy(base); _pb["features"].update(turnover_extra=False, restart_extra=False, carrier_extra=False)  # cached v18 features: only ball, labels, halves are used
+preps = {m: model.prepare_idsse(m, _pb, variant=base["idsse_bench"]["train_degrade"]) for m in ids}
 E = {m: pickle.load(open(f"outputs/logs/experts_{B}/{m}.pkl", "rb")) for m in ids}
 obs = {m: preps[m]["bt"].observed for m in ids}
 outs = {k: Path(f"outputs/logs/experts_{k}_{B}") for k in ("seq", "seqT", "seqM")}

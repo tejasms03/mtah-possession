@@ -6,7 +6,8 @@ from possession import config, decode, model, selection
 from possession.external.bench import _vendor
 pm = _vendor("possession_metrics")
 base = config.load_params(); ids = model.external_matches(base)
-preps = {m: model.prepare_idsse(m, base, variant=base["idsse_bench"]["train_degrade"]) for m in ids}
+_pb = copy.deepcopy(base); _pb["features"].update(turnover_extra=False, restart_extra=False, carrier_extra=False)  # cached v18 features: only ball, labels, halves are used
+preps = {m: model.prepare_idsse(m, _pb, variant=base["idsse_bench"]["train_degrade"]) for m in ids}
 P0 = selection.version_params(base, selection.VERSIONS["v6"])
 empty = pd.DataFrame(columns=["start_frame", "end_frame", "type", "team"])
 def labels(P, d):
@@ -36,8 +37,13 @@ if os.environ.get("CANDS"):
         "seqT_mot sc-1 w1 (v20)": ("seqT_mot", {"decode.switch_center": -1.0, "model.w_team": 1.0}),
         "seqT_ca sc-0.5 w1.5": ("seqT_ca", {"decode.switch_center": -0.5, "model.w_team": 1.5}),
     }.items()}
-P0["decode"]["switch_center"] = -0.5          # reference = v19 exactly
-ref = labels(P0, "mot")
+if os.environ.get("VS21"):   # reference = v21; candidates on carrier + turnover experts
+    cands = {f"{d} sc{sc:g} w{w:g}": (d, {"decode.switch_center": sc, "model.w_team": w})
+             for d in ("seqT_toca", "toca") for sc in (-1.0, -0.5) for w in (1.0, 1.5)}
+    ref = labels(setp(P0, {"decode.switch_center": -1.0, "model.w_team": 1.0}), "seqT_to")
+else:
+    P0["decode"]["switch_center"] = -0.5          # reference = v19 exactly
+    ref = labels(P0, "mot")
 rng = np.random.default_rng(0)
 def spell(gt, lab): return pm.evaluate(pm.label_codes(gt), pm.label_codes(lab), bootstrap_n=0)["spell_f1_mean"]
 for name, (d, kv) in cands.items():

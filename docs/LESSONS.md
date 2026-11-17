@@ -57,6 +57,29 @@ Fix one kind of error with the truth on the bench and rescore (`outputs/logs/ora
 So the target is **team calls in quick turnovers, mostly with the ball visible**. Dead-ball
 work has little left to give.
 
+### 2b. v21 errors in the scorer's own terms (17 Nov, `outputs/logs/spell_breakdown.py`, `spell_whatif.py`)
+
+At IoU 0.5 over the 10 matches: 3,379 true possessions, 2,862 ours; precision 0.80, recall 0.68.
+F1 falls from 0.81 at IoU 0.3 to 0.61 at IoU 0.7, so boundary placement costs a lot. Each row
+sets only those spans to the truth and rescores (rows overlap, so gains do not add):
+
+| Fix with the truth | gain |
+|---|---|
+| true possessions we got no same-team overlap with at all (540; wrong team or dead over them) | +0.148 |
+| all missed true possessions under 4 s | +0.130 |
+| boundaries of possessions we did match (overstated: the paste also fixes what lies inside; a boundary refiner that finds the exact frame more often than v21 gained only +0.002, see DECISIONS) | +0.117 |
+| our extra fragments overlapping a true possession | +0.096 |
+| missed with a boundary too far off (222) | +0.042 |
+| our possessions inside the other team's or a stoppage (153) | +0.037 |
+| true possessions split by our flip or dead blip (38) | +0.016 |
+| missed because merged into a longer one of ours (297) | +0.003 |
+| our dead blips under 2 s inside a true possession | 0.000 |
+
+Boundaries have no steady lag (median offset -3..0 frames), but a long tail: about 30% of
+turnover boundaries are more than 0.5 s off. Short possessions we do output are matched 62%
+(<1 s) to 72% (2-4 s), above the ~36% break-even for adding one, so finding more of them pays if
+the evidence is there.
+
 ## 3. What has worked for us
 
 - Training on damage that copies our tracking (v17): our biggest single jump.
