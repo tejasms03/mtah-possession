@@ -63,7 +63,7 @@ decode:
   w_tag_team: 0                  # ... and the named team restarts. v15: off (same bench test)
   tag_team_frames: 375           # 15 s after the tag start
   w_switch: 1                    # change detector (council expert #4): H<->A cost -= w * (log-odds - center); 0 = off. v16
-  switch_center: -0.5            # v19 (was 0): trust the change detector more, with merge_sandwich_s 1.5
+  switch_center: -1.0            # v20 (v19 -0.5): with the sequence model's team evidence (bench +0.0067, rule v2)
   switch_max_cost: 8.0
   switch_half_window: 12         # detector target: a team switch within +-0.5 s
   chair: false                   # learned chair (stacked second-level model) replaces the hand-weighted emissions
@@ -75,6 +75,9 @@ decode:
   switch_offset_frames: 0        # stage 6: measured lag correction
   gap_pool: 0.0                  # bench test: blend dead log-odds with the missing-ball run's mean (0 = off)
   dead_bias_miss: -0.75          # v18: extra dead log-odds where the raw ball is missing (with motion_extra; -0.4..-1 all pass, every match better)
+  peak_insert: 0.0               # bench test: cut our possessions at change-detector peaks above this log-odds (0 = off)
+  peak_min_s: 1.5
+  peak_min_llr: 1.0
   gap_anchor: 0.0                # bench test: team evidence added across a ball gap whose two ends favour the same team (0 = off)
   gap_anchor_edge_s: 0.4
   gap_anchor_min_s: 1.0
@@ -82,10 +85,44 @@ decode:
   merge_sandwich_s: 1.5          # v19: merge our A-H-A blips shorter than this, the training labels' own rule (idsse_bench.merge_blip_s)
   last_touch_s: 2.0              # v19: last touch before a stoppage owns the ball up to it
   last_touch_extend_s: 0.0       # bench test: a touch this soon after our stoppage start moves the start to the touch
+  # bench-test rules (src/possession/rules.py), all 0 = off
+  rt_s: 0.0                      # 1 restart team: ball out, same team both sides -> other team's last touch within rt_s owns to the stoppage
+  rt_tags: 0                     # 2 ... use the set-piece tag type (throw-in/corner/goal kick vs free kick) before the restart location
+  rt_foul: 0                     # ... free kick to the team without the ball before -> fouled team owns up to the stoppage
+  rt_fallback_s: 0.0             # ... no touch found: give the other team this many seconds
+  rt_line_m: 2.0
+  ln_s: 0.0                      # 3 team clearly nearest the ball at its last sighting (within ln_s) owns to the stoppage
+  ln_m: 2.0
+  ln_gap_m: 1.0
+  tf_s: 0.0                      # 4 one team clearly controlling the seen ball for tf_s -> its frames
+  tf_m: 1.5
+  tf_gap_m: 2.0
+  dc_on: 0                       # 5 stoppage, same team both sides, ball mostly missing, players moving -> live
+  dc_miss: 0.8
+  dc_spd: 0.0
+  dc_block: 0.0
+  dc_max_s: 0.0
+  nr_s: 0.0                      # 6 stoppage, same team both sides, no ball near a line (nr_m) within nr_s of its start, no tag -> live
+  nr_m: 3.0
+  gr_mode: 0                     # 7 missing-ball run: 1 = both ends' nearest team agree -> owns it; 2 = vanishing end decides
+  gr_min_s: 1.0
+  gr_m: 2.0
+  gr_gap_m: 1.0
+  fs_v: 0.0                      # 8 restart snaps to the ball speeding past fs_v (m/s) within fs_s; fs_stop: stoppage start too
+  fs_s: 1.0
+  fs_stop: 0
+  ts_off_s: 0.0                  # 9 restart snaps to a set-piece tag start + ts_off_s (within ts_w_s)
+  ts_w_s: 3.0
+  pt_on: 0                       # 10 attacking-phase tags: pt_live (stoppage inside one -> live), pt_gap (team inside ball gaps)
+  pt_live: 0
+  pt_gap: 0
 
 features:
   gap_extra: false               # whole-gap ball context (where the ball vanished / came back); bench test
   motion_extra: true             # v18: top speeds, speed spread, accelerations, block movement, duels (with decode.dead_bias_miss: 10-match hold-out +0.016, every match better)
+  turnover_extra: true           # v21: turnover signs for the change detector (to_*; model A never uses them). With the sequence model: bench +0.0122 vs v19, 9/10 matches, 90% range +0.0065..+0.019 (rule v2)
+  restart_extra: false           # restart layout from players for model A (rl_*); bench test
+  carrier_extra: false           # ball-carrier notes per team for model B and the change detector (ca_*); bench test
   ghost_extra: false             # idea D: ball point guessed from players (src/possession/ghost.py); bench test
   extra_team: true               # idea 2: heading, pressure, touch runs, last toucher (+0.012/+0.013 on whole-match select)
   team_windows_s: [0.4, 1, 2, 4]          # centred means for the whose-ball notes
@@ -114,6 +151,9 @@ model:
   max_leaf_nodes: 31
   min_samples_leaf: 300          # high: neighbouring frames are near copies
   l2: 1.0
+  sequence:
+    use: true                    # v20/v21 tree sequence model (src/possession/sequence.py): team evidence from a second stage reading the first stage's outputs over -4..+4 s; bench test
+    team_only: true              # replace only the team evidence (switch evidence stays first-stage)
   ensemble:
     size: 1                      # v14: single model set (5-member average tied on the whole-match bench)
     max_features: 0.8            # members only: share of features tried per split
@@ -133,7 +173,8 @@ model:
     clear_s: 5.0                 # away from any set-piece tag
     weight: 3.0
   dead_metrica_full: true        # average model A with a Metrica-only dead model that keeps ball motion
-  dead_drop_prefixes: [ball_speed, ball_still_s, touch_since, touch_until, d1_min, n5_sum]  # DFL freezes the ball at stoppages
+  dead_drop_prefixes: [ball_speed, ball_still_s, touch_since, touch_until, d1_min, n5_sum, to_]  # DFL freezes the ball at stoppages (to_ = turnover signs, ball motion)
+  switch_drop_prefixes: []       # game-block columns the change detector may not use (bench: [rl_] / [to_] to test each block alone)
   w_dead: 0.5                    # decoder: weight on model A log-odds
   w_team: 1                    # decoder: weight on model B log-odds
   dead_bias: 1                 # decoder: shift on model A log-odds

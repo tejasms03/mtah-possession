@@ -11,6 +11,7 @@ Every value is in params.yaml under `decode`. Owner: person 3.
 import numpy as np
 from numba import njit
 
+from possession import rules
 from possession.ballfilter import BallTrack
 
 LABELS = np.array(["H", "A", "D"])
@@ -208,7 +209,8 @@ def missing_ball_adjust(dead_logodds: np.ndarray, bt: BallTrack, p: dict) -> np.
 
 
 def decode(bt: BallTrack, dead_logodds: np.ndarray, halves, params: dict, hints=None,
-           model_team_llr=None, pitch=(105.3, 68.0), switch_logodds=None, chair_logp=None) -> np.ndarray:
+           model_team_llr=None, pitch=(105.3, 68.0), switch_logodds=None, chair_logp=None,
+           ctx=None) -> np.ndarray:
     """Labels (N,) "H"/"A"/"D" inside each half, "X" outside. model_team_llr (model B's H-vs-A
     log-odds) is added to the touch evidence when given."""
     p = params["decode"]
@@ -239,10 +241,43 @@ def decode(bt: BallTrack, dead_logodds: np.ndarray, halves, params: dict, hints=
         out[a : b + 1] = LABELS[viterbi(e[a : b + 1], min_len, cost[a : b + 1])]
         if p["refine"]:
             out = refine_boundaries(out, bt, a, b, params, pitch)
+        if p.get("peak_insert", 0) and switch_logodds is not None:
+            out[a : b + 1] = insert_at_peaks(out[a : b + 1], team_llr[a : b + 1], switch_logodds[a : b + 1], p)
         if p.get("merge_sandwich_s", 0):
             out[a : b + 1] = merge_sandwiches(out[a : b + 1], int(round(p["merge_sandwich_s"] * 25)))
         if p.get("last_touch_s", 0):
             out[a : b + 1] = last_touch_before_dead(out[a : b + 1], bt.touch_team[a : b + 1], p)
+        rules.apply(out, a, b, bt, ctx, p)      # bench-test rules (src/possession/rules.py), all off by default
+    return out
+
+
+def insert_at_peaks(lab: np.ndarray, team_llr: np.ndarray, sw: np.ndarray, p: dict) -> np.ndarray:
+    """Off unless decode.peak_insert > 0 (ASRF-style boundary insertion). Peaks of the change
+    detector's log-odds above peak_insert (local maxima, one per +-0.5 s) inside one of our H/A
+    runs cut it. Each piece between cuts that is at least peak_min_s long and whose mean team
+    evidence favours the other team by more than peak_min_llr takes that team."""
+    out = lab.copy()
+    sw = np.nan_to_num(np.asarray(sw, float), nan=-99.0)
+    n, w = len(sw), 12
+    pad = np.r_[np.full(w, -99.0), sw, np.full(w, -99.0)]
+    win = np.lib.stride_tricks.sliding_window_view(pad, 2 * w + 1)
+    peaks = np.flatnonzero((sw >= win.max(axis=1)) & (sw > p["peak_insert"]))
+    min_len, thr = int(round(p.get("peak_min_s", 1.5) * 25)), p.get("peak_min_llr", 1.0)
+    e = np.flatnonzero(np.r_[True, out[1:] != out[:-1], True])
+    for s, t in zip(e[:-1], e[1:]):
+        if out[s] not in ("H", "A"):
+            continue
+        cuts = [s] + [int(c) for c in peaks if s < c < t] + [t]
+        if len(cuts) == 2:
+            continue
+        for c0, c1 in zip(cuts[:-1], cuts[1:]):
+            if c1 - c0 < min_len:
+                continue
+            m = np.nanmean(team_llr[c0:c1])
+            if out[s] == "H" and m < -thr:
+                out[c0:c1] = "A"
+            elif out[s] == "A" and m > thr:
+                out[c0:c1] = "H"
     return out
 
 

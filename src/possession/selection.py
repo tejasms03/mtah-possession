@@ -12,7 +12,7 @@ import copy
 import numpy as np
 import pandas as pd
 
-from possession import config, deadball, decode, model
+from possession import config, deadball, decode, model, rules
 from possession.external import metrica
 from possession.progress import Progress
 
@@ -68,7 +68,7 @@ def run_version(prep, train, tags, params) -> np.ndarray:
     m = params["model"]
     return decode.decode(prep["bt"], m["w_dead"] * dead + m["dead_bias"], prep["halves"], params,
                          deadball.set_piece_hints(tags), model_team_llr=team, pitch=prep["pitch"],
-                         switch_logodds=switch)
+                         switch_logodds=switch, ctx=rules.context(prep, params, tags))
 
 
 def main(versions=None, extra_team: bool = False) -> None:

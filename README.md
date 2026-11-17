@@ -63,3 +63,17 @@ IDSSE: Bassek, Rein, Weber, Memmert (2025). *An integrated dataset of spatiotemp
 data in elite soccer.* Scientific Data 12, 195. Data © Deutsche Fußball Liga (DFL), CC-BY 4.0.
 
 Metrica Sports sample data (3 matches): https://github.com/metrica-sports/sample-data, used with acknowledgement as its README asks.
+
+## Use of AI tools
+
+An AI coding assistant (Claude, by Anthropic, through Claude Code) helped write and debug the
+code, design and run the experiments, and draft the documentation. Every result was checked by
+the team, and every adoption decision is recorded with its evidence in `docs/DECISIONS.md`.
+
+**No competition data was shared with any AI service.** Following the challenge terms (OVERVIEW.md,
+"Use of Large Language Models"), no match video, tracking, Smart Tagging, homography, public
+ground truth or output label file was uploaded or shown to a hosted AI. The match data stayed on
+our own machines; the assistant worked with source code, documentation and aggregate statistics
+computed locally (for example a bench score or a count of possessions). No label in the
+submission was written by an AI or by hand: every label comes from the pipeline in this
+repository.

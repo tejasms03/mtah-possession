@@ -3,7 +3,7 @@ EXP=name python decode_sweep.py 'decode.gap_pool=0,0.5' [...]   (grid; EXP '' = 
 Always prints the v17 row first; every delta (dMET, dDFL, worst) is against v17."""
 import copy, itertools, os, pickle, sys
 import numpy as np, pandas as pd
-from possession import config, decode, model, selection
+from possession import config, decode, model, rules, selection
 from possession.external.bench import _vendor
 
 pm = _vendor("possession_metrics")
@@ -20,6 +20,10 @@ ex = load(f"_{EXP}") if EXP else ex17
 P0 = selection.version_params(base, selection.VERSIONS["v6"])
 empty = pd.DataFrame(columns=["start_frame", "end_frame", "type", "team"])
 met = np.array([m.startswith("MET") for m in ids])
+# rule context; TAGS=1: Metrica stand-in set-piece tags (from its own events, tag_lead_s early), none for DFL
+TAGS = os.environ.get("TAGS") == "1"
+ctxs = {m: rules.context(preps[m], base, selection.stand_in_tags(m, len(preps[m]["gt"]), base["selection"]["tag_lead_s"])
+                         if TAGS and m.startswith("MET") else None) for m in ids}
 
 
 def run(P, E):
@@ -27,7 +31,7 @@ def run(P, E):
     for mid in ids:
         e, pr = E[mid], preps[mid]
         lab = decode.decode(pr["bt"], P["model"]["w_dead"] * e["dead"] + P["model"]["dead_bias"], pr["halves"], P,
-                            empty, model_team_llr=e["team"], pitch=pr["pitch"], switch_logodds=e["switch"])
+                            empty, model_team_llr=e["team"], pitch=pr["pitch"], switch_logodds=e["switch"], ctx=ctxs[mid])
         out.append(pm.evaluate(pm.label_codes(pr["gt"]), pm.label_codes(lab), bootstrap_n=0)["spell_f1_mean"])
     return np.array(out)
 

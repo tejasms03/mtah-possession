@@ -53,11 +53,36 @@ def label_with_models(tr, halves, params, tags=None, pitch=None) -> np.ndarray:
     if params["decode"].get("w_switch", 0):
         print("[change detector] training on outside matches", flush=True)
         switch = model.predict_switch(model.fit_switch(preps, params), prep)
+    if params["model"].get("sequence", {}).get("use"):
+        team, switch = sequence_stage(preps, prep, params, dict(dead=dead, team=team, switch=switch))
     m = params["model"]
     dead = m["w_dead"] * dead + m["dead_bias"]
     hints = deadball.set_piece_hints(tags) if tags is not None else None
+    from possession import rules
     return decode.decode(prep["bt"], dead, halves, params, hints, model_team_llr=team, pitch=pitch,
-                         switch_logodds=switch)
+                         switch_logodds=switch, ctx=rules.context(prep, params, tags))
+
+
+def sequence_stage(preps, prep, params, ours: dict):
+    """Second stage (model.sequence): held-out first-stage outputs for each outside match (models
+    trained on the other outside matches, never on it, never on ours), a second stage trained on
+    those, then applied to our match's first-stage outputs."""
+    from possession import model, sequence
+    from possession.progress import Progress
+
+    bar = Progress("sequence: held-out first stage on outside matches", len(preps))
+    items = []
+    for i, q in enumerate(preps):
+        train = [preps[j] for j in range(len(preps)) if j != i]
+        d, t = model.predict_ensemble(model.fit_ensemble(train, params, label="    fold"), q, params)
+        s = model.predict_switch(model.fit_switch(train, params), q) if params["decode"].get("w_switch", 0) else None
+        items.append((dict(dead=d, team=t, switch=s), q["bt"].observed, q["gt"]))
+        bar.step(str(q.get("id", i)))
+    models = sequence.fit(items)
+    team2, switch2 = sequence.predict(models, ours, prep["bt"].observed)
+    if params["model"]["sequence"].get("team_only", True):
+        return team2, ours["switch"]
+    return team2, switch2
 
 
 def run(out: Path, rules_only: bool = False) -> None:

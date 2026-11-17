@@ -22,6 +22,9 @@ def setp(P, k, val):
     node = P; *path, last = k.split(".")
     for p in path: node = node[p]
     cur = node.get(last)
+    if isinstance(cur, list):
+        node[last] = [x for x in val.split(",") if x]
+        return
     node[last] = (val in ("1", "true", "True")) if isinstance(cur, bool) else (int(float(val)) if isinstance(cur, int) and float(val).is_integer() else float(val))
 
 

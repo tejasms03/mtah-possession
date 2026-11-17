@@ -13,6 +13,7 @@ Owner: person 4.
 """
 
 import copy
+import os
 import pickle
 
 import numpy as np
@@ -96,6 +97,12 @@ def prepare_idsse(match_id: str, params: dict, refresh: bool = False, variant: s
         tag += "_mot"
     if params["features"].get("ghost_extra"):
         tag += "_gho"
+    if params["features"].get("turnover_extra"):
+        tag += "_to"
+    if params["features"].get("restart_extra"):
+        tag += "_rl"
+    if params["features"].get("carrier_extra"):
+        tag += "_ca"
     path = CACHE / (f"{match_id}{tag}_xt.pkl" if params["features"].get("extra_team") else f"{match_id}{tag}.pkl")
     if path.exists() and not refresh:
         with open(path, "rb") as fh:
@@ -109,6 +116,8 @@ def prepare_idsse(match_id: str, params: dict, refresh: bool = False, variant: s
         params["features"]["ghost_for"] = match_id          # the ghost model that never saw this match
     prep = prepare(clean_atd(m.tracking, params), m.halves, m.pitch, params, gt=bench_gt(m))
     prep["id"] = match_id
+    if os.environ.get("MTAH_NO_CACHE_WRITE") == "1":       # disk is tight: keep it in memory only
+        return prep
     CACHE.mkdir(parents=True, exist_ok=True)
     with open(path, "wb") as fh:
         pickle.dump(prep, fh)
@@ -356,13 +365,19 @@ def predict_ensemble(members: list, prep: dict, params: dict) -> tuple[np.ndarra
 SWITCH_LAGS = (12, 25, 50)            # before/after offsets in frames: 0.5, 1, 2 s
 
 
-def switch_matrix(prep: dict, idx: np.ndarray) -> np.ndarray:
+def switch_keep(params: dict) -> np.ndarray:
+    """Game-block columns the change detector may use (model.switch_drop_prefixes)."""
+    drop = tuple(params["model"].get("switch_drop_prefixes", []))
+    return np.array([not c.startswith(drop) for c in dead_columns(params)]) if drop else None
+
+
+def switch_matrix(prep: dict, idx: np.ndarray, keep=None) -> np.ndarray:
     """Inputs for the change detector at frames idx: the game block plus, for each lag k, the size
     of the change in H-minus-A team features from k frames before to k frames after (absolute
     values, so the expert is team-blind). Only degraded inputs our tracking also has."""
     d = prep["own_H"] - prep["own_A"]
     n = len(d)
-    parts = [prep["dead"][idx]]
+    parts = [prep["dead"][idx] if keep is None else prep["dead"][idx][:, keep]]
     for k in SWITCH_LAGS:
         parts.append(np.abs(d[np.minimum(idx + k, n - 1)] - d[np.maximum(idx - k, 0)]))
     return np.nan_to_num(np.hstack(parts), nan=0.0).astype(np.float32)
@@ -380,18 +395,21 @@ def switch_target(gt: np.ndarray, half_window: int) -> np.ndarray:
 def fit_switch(preps: list[dict], params: dict):
     """Change detector trained on outside matches only (live frames, every row_step-th)."""
     p = params["decode"]
+    keep = switch_keep(params)
     X, y = [], []
     for q in preps:
         r = rows(q, params["model"]["row_step"], 2)
         r = r[np.isin(q["gt"][r], ["H", "A"])]
-        X.append(switch_matrix(q, r))
+        X.append(switch_matrix(q, r, keep))
         y.append(switch_target(q["gt"], p["switch_half_window"])[r])
     m = make_model(params)
     m.fit(np.concatenate(X), np.concatenate(y))
+    m.keep_ = keep
     return m
 
 
 def predict_switch(m, prep: dict, chunk: int = 20000) -> np.ndarray:
     n = len(prep["dead"])
-    return np.concatenate([m.decision_function(switch_matrix(prep, np.arange(a, min(n, a + chunk))))
+    keep = getattr(m, "keep_", None)
+    return np.concatenate([m.decision_function(switch_matrix(prep, np.arange(a, min(n, a + chunk)), keep))
                            for a in range(0, n, chunk)])
