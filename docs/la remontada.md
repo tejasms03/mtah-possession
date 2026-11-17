@@ -2,12 +2,12 @@
 
 More Than A Hack 2027 · Technical document · Code: https://github.com/tejasms03/mtah-possession
 
-**Submission:** `la remontada.csv`, SHA-256 `8250697de1c356b27592d474c51bb1055ef98ec7121835014cf1d3ae825ae184`.
+**Submission:** `la remontada.csv`, SHA-256 `b886ae5807d19e3bea7d79f949655e890538b1d891bc2eb5b55bfe96298c7158 (version v22)`.
 `make submission TEAM=la_remontada` regenerates it byte for byte, which we checked from a fresh clone.
 
 ## 1. Approach in one paragraph
 
-We label every frame H, A or D in three steps:
+We label every frame H, A or D in four steps:
 
 1. **Per-frame experts.** Three gradient-boosted tree models (scikit-learn `HistGradientBoostingClassifier`)
    read features built only from the tactical tracking (ATD):
@@ -17,7 +17,15 @@ We label every frame H, A or D in three steps:
    - **a change detector:** does control pass from one team to the other within ±0.5 s?
 2. **A tree sequence model** re-reads B's and the detector's outputs at 15 time offsets, from -4 s to +4 s,
    so it sees the *shape* of a turnover (pass, opponent arrives, play goes on). A single frame cannot show that.
-3. **A Viterbi decoder** over H/A/D turns these per-frame log-odds into possessions. It uses switch costs that
+3. **A network sequence model (TCN)** re-reads the first-stage outputs (team, change-detector and dead
+   log-odds) together with ball visibility, ball speed, each team's distance to the ball and touches, over
+   about ±20 s. It is a small non-causal dilated temporal convolution network (64 channels, kernel 3, dilations
+   1 to 256, residual blocks; about 150k weights) with an H/A/D head and a turnover head. It is team-blind: it
+   runs on the inputs and with H and A swapped, and the two answers are averaged. Its H/A/D log-probabilities
+   are blended 50/50 into the decoder's per-frame evidence. It was trained offline in PyTorch on the 10 outside
+   matches only (`tools/train_tcn.py`). The weights are committed (`models/tcn.npz`) and the pipeline runs them
+   with plain numpy, so the submission needs no PyTorch and is byte-identical on every run.
+4. **A Viterbi decoder** over H/A/D turns these per-frame log-odds into possessions. It uses switch costs that
    fall where the change detector fires, a minimum length for dead spells and for possessions, and the
    possession conventions of the training labels (section 4).
 
@@ -27,8 +35,8 @@ whole possessions, so we optimised and chose versions by spellF1 on held-out out
 public 5 minutes.
 
 **Why this design rather than another:**
-- **Trees, not a network.** Our inputs are tabular, and the literature shows architectures within a few
-  points of each other on this task.
+- **Trees first, then a small network.** Our inputs are tabular, so trees do the per-frame work. A small
+  sequence network on top of them adds longer context (±20 s) cheaply.
 - **A decoder.** spellF1 punishes flicker (one wrong frame splits a possession into three), and a constrained
   decoder fixes exactly that.
 - **Two separate questions.** Dead ball and team need different evidence, so each gets its own model.
@@ -98,10 +106,16 @@ current version:
 | v17 | "faithful" training damage | 0.682 |
 | v18 | player-motion inputs for the dead-ball model, plus a live-play bias while the ball is missing | 0.698 |
 | v19 | decoder matched to the label conventions (blip merge, last touch before a stoppage, switch costs) | 0.710 |
-| **v21 (submitted)** | turnover inputs for the change detector, plus the tree sequence model | **0.722** (DFL 0.705, Metrica 0.763) |
+| v21 | turnover inputs for the change detector, plus the tree sequence model | 0.722 (DFL 0.705, Metrica 0.763) |
+| **v22 (submitted)** | network sequence model (TCN) blended into the decoder evidence | **0.739** (DFL 0.722, Metrica 0.780) |
 
-For v21 against v19: +0.012, 9 of 10 matches better, bootstrap 90% range +0.007 to +0.019. On our match, v21
-outputs 273 possessions, and 43% of graded frames are dead ball.
+For v21 against v19: +0.012, 9 of 10 matches better, bootstrap 90% range +0.007 to +0.019.
+
+For v22 against v21: +0.017, 10 of 10 matches better (DFL +0.017, Metrica +0.017), bootstrap 90% range +0.013 to
++0.023. A second training seed and the neighbouring blend weights (0.25, 0.75) give the same. The gain is almost
+all live vs dead ball: live/dead mix-ups where the ball is seen fall from 2.3% to 0.6% of frames. Wrong-team frames
+and quick turnovers are unchanged. Using the turnover head as the change signal, or blending only where the ball
+is hidden, added nothing and is off. On our match, v22 outputs 295 possessions (v21: 273).
 
 **Tried and dropped (details and numbers in `docs/DECISIONS.md`):**
 - 13 hand-written football rules (best +0.0004);
@@ -127,7 +141,6 @@ outputs 273 possessions, and 43% of graded frames are dead ball.
 - **Our test matches are proxies.** The damage is matched to our match's statistics, but DFL and Metrica
   tracking differ from ours in ways we cannot fully copy.
 - **With more time we would try:**
-  - a sequence network (a dilated TCN) over the per-frame outputs;
   - several damage seeds per training match;
   - PFF World Cup data, which has real occlusions.
 
@@ -141,6 +154,9 @@ outputs 273 possessions, and 43% of graded frames are dead ball.
   After the organisers' clarification (no training on the provided match) and EVALUATION.md (no choosing by
   the public window), both were switched off and all later choices were made on outside matches. The
   submitted v21 uses neither.
+- **The TCN idea.** The design follows a generic published architecture (dilated residual temporal convolutions).
+  Another team's public write-up (Opus-Operandi) prompted us to try it; we did not use their code. All TCN code
+  is ours.
 - **AI tools.** An AI coding assistant (Claude by Anthropic, through Claude Code) helped write and debug code,
   run experiments, and draft documentation. **No competition data was shared with any AI service:** no video,
   tracking, Smart Tagging, homography, public ground truth or output labels. The assistant saw only code,
@@ -158,6 +174,8 @@ uv run possession idsse                               # 7 DFL matches (public); 
 make submission TEAM=la_remontada                     # ~1 h 40 min, single-threaded
 make verify                                           # byte-identical check against SUBMISSION_SHA256
 ```
+
+Retraining the TCN weights is optional and needs PyTorch 2.x (see README); the submission run itself does not.
 
 **Reproducibility.** The run is single-threaded and uses fixed seeds and a pinned lock file. It rebuilds all
 features and models from scratch and writes `outputs/la_remontada.csv`, which is identical to the submitted
