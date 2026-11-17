@@ -24,7 +24,7 @@ Then:
 | Command | What it does |
 |---|---|
 | `make test` | unit tests |
-| `make submission TEAM=<name>` | full pipeline → `outputs/<name>.csv`, then validates it |
+| `make submission TEAM=<name>` | full pipeline → `outputs/<name>.csv`, then validates it (about 1 h 40 min on one laptop processor thread; it rebuilds all features and models from scratch) |
 | `make eval TEAM=<name>` | scores it on the public 5 minutes with the organisers' scorer |
 | `make verify` | regenerates and checks the file is byte-identical to the recorded hash |
 | `uv run possession idsse` | downloads, converts and degrades the 7 IDSSE matches into `external_data/idsse/` (~2.6 GB, ~10 min) |
