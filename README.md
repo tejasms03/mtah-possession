@@ -30,6 +30,13 @@ Then:
 **Our submission (team La Remontada):** `make submission TEAM=la_remontada` writes `outputs/la_remontada.csv`,
 byte-identical to the submitted `la remontada.csv` (SHA-256 in `SUBMISSION_SHA256`; `make verify` checks it).
 Make cannot take a space in `TEAM`, hence the underscore; only the file name differs.
+
+**v22 candidate (branch `tcn-candidate`):** adds a network sequence model (`src/possession/tcn.py`,
+`model.tcn.use`). Its weights `models/tcn.npz` are committed; the pipeline runs them with numpy, so
+`make submission` needs no PyTorch. To retrain them (optional, needs PyTorch 2.x, not in the uv env):
+build the per-match inputs from the out-of-fold first-stage outputs, then
+`python tools/train_tcn.py <ds_dir> models/tcn.npz <the 10 outside match ids, comma separated> 1500 0`.
+Bench against v21: `tools/bench_tcn.py` (leave-one-match-out folds from the same script).
 | `make verify` | regenerates and checks the file is byte-identical to the recorded hash |
 | `uv run possession idsse` | downloads, converts and degrades the 7 IDSSE matches into `external_data/idsse/` (~2.6 GB, ~10 min) |
 | `uv run possession bench [pipeline ...]` | scores pipelines on the degraded IDSSE matches → `outputs/bench/<pipeline>.csv` |
