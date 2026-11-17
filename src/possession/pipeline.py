@@ -50,17 +50,34 @@ def label_with_models(tr, halves, params, tags=None, pitch=None) -> np.ndarray:
                                     label="train pass 2 (+ our set-piece tags)")
         dead, team = model.predict_ensemble(models, prep, params)
     switch = None
+    first_team = None
     if params["decode"].get("w_switch", 0):
         print("[change detector] training on outside matches", flush=True)
         switch = model.predict_switch(model.fit_switch(preps, params), prep)
     if params["model"].get("sequence", {}).get("use"):
+        first_team = team
         team, switch = sequence_stage(preps, prep, params, dict(dead=dead, team=team, switch=switch))
     m = params["model"]
+    _dump_stage(prep, halves, dead, team, switch, first_team)
     dead = m["w_dead"] * dead + m["dead_bias"]
     hints = deadball.set_piece_hints(tags) if tags is not None else None
     from possession import rules
     return decode.decode(prep["bt"], dead, halves, params, hints, model_team_llr=team, pitch=pitch,
                          switch_logodds=switch, ctx=rules.context(prep, params, tags))
+
+
+def _dump_stage(prep, halves, dead, team, switch, first_team):
+    """MTAH_DUMP_STAGE=<path>: save the per-frame inputs of the decoder (does not change the output)."""
+    import os
+    import pickle
+    path = os.environ.get("MTAH_DUMP_STAGE")
+    if not path:
+        return
+    bt = prep["bt"]
+    with open(path, "wb") as fh:
+        pickle.dump({"dead": dead, "team": team, "switch": switch, "first_team": first_team, "halves": halves,
+                     "observed": bt.observed, "vx": bt.vx, "vy": bt.vy, "d_H": bt.d_H, "d_A": bt.d_A,
+                     "touch_team": bt.touch_team, "gap_len": bt.gap_len}, fh, protocol=4)
 
 
 def sequence_stage(preps, prep, params, ours: dict):
