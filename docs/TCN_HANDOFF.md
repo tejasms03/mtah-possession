@@ -88,9 +88,24 @@ compared byte for byte. You also need:
 
 ## 2. What Opus-Operandi did (read their repo; do not copy it)
 
-Repo: `github.com/Opus-Operandi-FC-Barcelona/mtah2027-possession-engine`. It has **no licence file**, so we
-may not copy their code. Re-implement the idea in our own code: a dilated TCN is a generic, published
-architecture.
+Repo: https://github.com/Opus-Operandi-FC-Barcelona/mtah2027-possession-engine. It has **no licence file**,
+so we may not copy their code. Read it, then re-implement the idea in our own code: a dilated TCN is a generic,
+published architecture.
+
+Where to look:
+
+| File | What it holds |
+|---|---|
+| `src/mtah2027/models/sequence_model.py` | numpy inference and the mixing parameters (`SequenceParams`: `emission_weight`, `emission_scale`, `visible_weight`, turnover gate) |
+| `scripts/train_sequence.py` | the PyTorch network (`class TCN`), losses, data sampling, hyperparameters (the argparse block near line 275) |
+| `scripts/export_sequence_json.py` | how weights are exported for numpy inference |
+| `scripts/sequence_eval.py` | how they benchmarked it |
+| `src/mtah2027/pipeline.py` and `src/mtah2027/models/specialist_fusion.py` | where the TCN plugs into their decoder |
+| `README.md`, lines about 25-150 | their results table and the list of what they adopted and rejected (issues #72-#81) |
+| `docs/TECHNICAL_REPORT.md` | their full write-up |
+
+Related: their benchmark repo, https://github.com/Opus-Operandi-FC-Barcelona/mtah2027-external-benchmarks
+(external matches, the degrader, Optuna tuning).
 
 - **Network:** non-causal dilated TCN.
   - 1x1 input projection to 64 channels.
