@@ -53,14 +53,23 @@ def label_with_models(tr, halves, params, tags=None, pitch=None) -> np.ndarray:
     if params["decode"].get("w_switch", 0):
         print("[change detector] training on outside matches", flush=True)
         switch = model.predict_switch(model.fit_switch(preps, params), prep)
+    first = dict(dead=dead, team=team, switch=switch)        # first-stage outputs (the TCN's inputs)
     if params["model"].get("sequence", {}).get("use"):
         team, switch = sequence_stage(preps, prep, params, dict(dead=dead, team=team, switch=switch))
+    tcn_logp = None
+    if params["model"].get("tcn", {}).get("use"):
+        from possession import tcn
+
+        print("[tcn] network sequence model (numpy, saved weights)", flush=True)
+        W = tcn.load(config.REPO_ROOT / params["model"]["tcn"]["weights"])
+        tcn_logp, _ = tcn.predict_match(W, first["team"], first["switch"], first["dead"], prep["bt"], halves,
+                                        len(prep["bt"].observed))
     m = params["model"]
     dead = m["w_dead"] * dead + m["dead_bias"]
     hints = deadball.set_piece_hints(tags) if tags is not None else None
     from possession import rules
     return decode.decode(prep["bt"], dead, halves, params, hints, model_team_llr=team, pitch=pitch,
-                         switch_logodds=switch, ctx=rules.context(prep, params, tags))
+                         switch_logodds=switch, ctx=rules.context(prep, params, tags), tcn_logp=tcn_logp)
 
 
 def sequence_stage(preps, prep, params, ours: dict):

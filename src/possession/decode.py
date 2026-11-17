@@ -210,7 +210,7 @@ def missing_ball_adjust(dead_logodds: np.ndarray, bt: BallTrack, p: dict) -> np.
 
 def decode(bt: BallTrack, dead_logodds: np.ndarray, halves, params: dict, hints=None,
            model_team_llr=None, pitch=(105.3, 68.0), switch_logodds=None, chair_logp=None,
-           ctx=None) -> np.ndarray:
+           ctx=None, tcn_logp=None) -> np.ndarray:
     """Labels (N,) "H"/"A"/"D" inside each half, "X" outside. model_team_llr (model B's H-vs-A
     log-odds) is added to the touch evidence when given."""
     p = params["decode"]
@@ -234,6 +234,13 @@ def decode(bt: BallTrack, dead_logodds: np.ndarray, halves, params: dict, hints=
             inside = starts[(starts > a) & (starts <= b)]
             if len(inside):
                 e[a : int(inside.min()), :2] = -1e9
+    if tcn_logp is not None:
+        # network sequence model (src/possession/tcn.py): blend its H/A/D log-probabilities in,
+        # on every frame or only where the ball is not seen (decode.tcn_hidden_only)
+        w = np.full(len(e), float(p["tcn_weight"]))
+        if p.get("tcn_hidden_only", False):
+            w[np.asarray(bt.observed, bool)] = 0.0
+        e = (1 - w)[:, None] * e + w[:, None] * p["temperature"] * tcn_logp
     cost = switch_costs(bt, len(e), params, switch_logodds)
     min_len = (p["min_possession_frames"], p["min_possession_frames"], p["min_dead_frames"])
     out = np.full(len(e), "X", dtype="<U1")
